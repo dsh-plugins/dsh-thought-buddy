@@ -6,12 +6,26 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
-let yaml
-try {
-  yaml = require('js-yaml') // 项目内（若有）
-} catch {
-  // dsh 安装树内的 js-yaml（开发机 fallback）
-  yaml = require('C:/Users/Administrator/AppData/Roaming/npm/node_modules/@deepseek-ai/dsh/node_modules/js-yaml')
+// js-yaml 是可选依赖：项目零依赖，CI 上没有 js-yaml 时优雅跳过
+// （GitHub 自身会在 push 时校验 workflow 语法）。开发机上优先用
+// 项目内安装，其次 dsh 安装树内的副本。
+function loadYaml() {
+  for (const candidate of [
+    'js-yaml',
+    'C:/Users/Administrator/AppData/Roaming/npm/node_modules/@deepseek-ai/dsh/node_modules/js-yaml',
+  ]) {
+    try {
+      return require(candidate)
+    } catch {
+      // try next
+    }
+  }
+  return null
+}
+const yaml = loadYaml()
+if (yaml === null) {
+  console.log('info: js-yaml not available in this environment — skipping workflow YAML validation (GitHub validates workflow syntax on push)')
+  process.exit(0)
 }
 
 const workflowsDir = join(dirname(fileURLToPath(import.meta.url)), '..', '.github', 'workflows')
