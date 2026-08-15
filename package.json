@@ -30,6 +30,14 @@
   "engines": {
     "node": ">=20"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dsh-plugins/dsh-thought-buddy.git"
+  },
+  "homepage": "https://github.com/dsh-plugins/dsh-thought-buddy",
+  "bugs": {
+    "url": "https://github.com/dsh-plugins/dsh-thought-buddy/issues"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"

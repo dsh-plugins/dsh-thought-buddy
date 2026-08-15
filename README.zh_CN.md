@@ -6,6 +6,16 @@
 
 [English](README.md) | 简体中文
 
+<a href="https://github.com/dsh-plugins/dsh-thought-buddy/actions/workflows/npm-publish.yml">
+  <img src="https://github.com/dsh-plugins/dsh-thought-buddy/actions/workflows/npm-publish.yml/badge.svg" alt="构建状态">
+</a>
+<a href="https://www.npmjs.com/package/@dsh-plugin/dsh-thought-buddy">
+  <img src="https://img.shields.io/npm/v/@dsh-plugin/dsh-thought-buddy.svg?sanitize=true" alt="版本">
+</a>
+<a href="https://www.npmjs.com/package/@dsh-plugin/dsh-thought-buddy">
+  <img src="https://img.shields.io/npm/l/@dsh-plugin/dsh-thought-buddy.svg?sanitize=true" alt="许可证">
+</a>
+
 </div>
 
 `dsh-thought-buddy` 是 [DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/) Web GUI 的纯客户端插件。模型工作时，那行 `Deep diving...` 状态条前多了一只 Grok 风格的小机器人头像：眨眼、弹簧形变换表情、视线游移、整体轻摆——全部由 **纯 SVG + `requestAnimationFrame`** 实时绘制，零运行时依赖。每次头像切换表情，状态文字还会以**打字机效果**变换（先逐字符删除，再逐字打出下一个词）。
@@ -25,7 +35,15 @@
 
 ## 安装
 
-插件以 `link:` 依赖接入 web profile（示例：`C:\Users\Administrator\.dsh\profiles\web`）：
+从 npm 安装（推荐）：
+
+```sh
+dsh plugin --profile web add @dsh-plugin/dsh-thought-buddy
+```
+
+重启 `dsh web`，刷新页面后给模型发一条消息，「Deep diving...」前即出现小伙伴。
+
+本地开发时，插件以 `link:` 依赖接入 web profile（示例：`C:\Users\Administrator\.dsh\profiles\web`）：
 
 ```jsonc
 // package.json（profile）
@@ -36,7 +54,7 @@
 1. 构建产物：`npm run build`（或 `node scripts/build.mjs`）生成 `lib/client.js` + `lib/index.js`
 2. profile 内 `pnpm install`（离线亦可）
 3. **重启 `dsh web`** —— 客户端模块清单在启动时组合，新 bundle 需要重启生效
-4. 刷新页面后，给模型发一条消息，「Deep diving...」前即出现小伙伴
+4. 刷新页面后，给模型发一条消息
 
 ## 配置（localStorage，改完刷新生效）
 
@@ -87,6 +105,11 @@ node demo/server.mjs 4173   # 预览 http://127.0.0.1:4173/demo/demo.html
 - **打字机**：基于状态条的文本节点的定时器状态机。React 不会触碰该节点——文本 fiber 的 children 字符串始终是 `"Deep diving..."`（bail out），与注入的头像节点同理。
 
 > ⚠️ 注意区分两个 inject：bundle 导出的 `exports.inject` 是 **cordis 服务依赖**（本插件只用 `ctx.effect`，必须为空数组；写成包名会导致 boot 时 fiber 永久等待不存在的服务而报 `pending (waiting for service: ...)`）；`package.json` 的 `dsh.client.inject` 是**客户端模块依赖声明**（本插件不依赖任何 client 服务，故省略）。
+
+## 链接
+
+- 仓库：https://github.com/dsh-plugins/dsh-thought-buddy
+- npm：https://www.npmjs.com/package/@dsh-plugin/dsh-thought-buddy
 
 ## License
 
