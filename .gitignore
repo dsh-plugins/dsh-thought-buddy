@@ -1,0 +1,10 @@
+# 参考项目源码（GrokBot Flutter 原版），只读引用，不入库
+ref/
+
+# 构建产物与依赖
+node_modules/
+lib/
+*.log
+
+# 本地验证截图
+demo/shot.png

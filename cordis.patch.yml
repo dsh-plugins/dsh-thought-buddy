@@ -1,0 +1,8 @@
+# dsh-thought-buddy bundle patch — 插入插件行。
+#
+# 行内 name 必须是完整包名 '@dsh-plugin/dsh-thought-buddy'：client-modules
+# 以 loader entry name 作为包名解析 dsh.client 声明与 exports["./client"]，
+# 浏览器半区随之以 /plugins/@dsh-plugin/dsh-thought-buddy/client.js 加载。
+- insert:
+    - id: thought-buddy
+      name: '@dsh-plugin/dsh-thought-buddy'

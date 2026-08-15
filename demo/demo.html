@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>dsh-thought-buddy — 预览</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: #f6f7fb;
+    color: #1c1e26;
+    padding: 24px;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #14161c; color: #e8eaf2; }
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p.sub { color: #666; font-size: 13px; margin: 0 0 20px; }
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    margin-bottom: 24px;
+  }
+  .controls button {
+    border: 1px solid #888; background: transparent; color: inherit;
+    border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px;
+  }
+  .controls button.active { background: #4f6ef7; border-color: #4f6ef7; color: #fff; }
+  .controls label { font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  .controls input[type="range"] { width: 120px; }
+  .stage {
+    background: #fff; border: 1px solid #e3e5ee; border-radius: 12px;
+    padding: 20px; margin-bottom: 24px;
+  }
+  @media (prefers-color-scheme: dark) {
+    .stage { background: #1d2028; border-color: #2c3040; }
+  }
+  .stage h2 { font-size: 13px; color: #777; font-weight: 600; margin: 0 0 12px; }
+  .status-row {
+    display: flex; align-items: center; min-height: 44px;
+  }
+  /* 模拟会话内的状态条宿主 */
+  .chat-host { display: flex; flex-direction: column; gap: 8px; }
+  .turn-status {
+    height: 26px; font: 600 14px/26px system-ui, sans-serif;
+    color: #4f6ef7; display: inline-flex; align-items: center; flex: none;
+    align-self: flex-start; white-space: nowrap;
+  }
+  .big-preview { display: flex; justify-content: center; padding: 12px 0 4px; }
+  .hint { font-size: 12px; color: #999; margin-top: 10px; }
+  .hint code { background: rgba(127,127,127,.15); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+  <h1>dsh-thought-buddy 预览</h1>
+  <p class="sub">
+    GrokBot 动画头像（移植自 <a href="https://github.com/nasawz/GrokBot">nasawz/GrokBot</a>，
+    纯 SVG + rAF），在 <code>Deep diving...</code> 前动态显示。下方用假 DOM 模拟会话状态条，
+    跑的是插件的真实观察器代码。
+  </p>
+
+  <div class="controls">
+    <button id="btn-avatar" class="active" type="button">GrokBot 头像</button>
+    <button id="btn-emoji" type="button">Emoji 轮播</button>
+    <label>大小 <input id="size" type="range" min="14" max="160" value="22" /></label>
+    <button id="btn-toggle-status" type="button">隐藏 / 显示状态条</button>
+    <button id="btn-reload" type="button">重新加载插件</button>
+  </div>
+
+  <div class="stage">
+    <h2>模拟会话（默认插件尺寸）</h2>
+    <div id="chat-host" class="chat-host" data-conversation-scroll>
+      <div class="status-row">
+        <div class="turn-status" role="status" aria-live="polite">Deep diving...</div>
+      </div>
+    </div>
+    <p class="hint">顶部控件实时写入 <code>localStorage</code> 并重启观察器；点「隐藏/显示状态条」模拟回合结束/开始。</p>
+  </div>
+
+  <div class="stage">
+    <h2>大头像（预览细节，走同一渲染引擎）</h2>
+    <div class="big-preview">
+      <div id="chat-host-big" class="chat-host" data-conversation-scroll>
+        <div class="status-row">
+          <div class="turn-status" role="status" aria-live="polite">Deep diving...</div>
+        </div>
+      </div>
+    </div>
+    <p class="hint">拖动上方「大小」滑杆可调，最小 14px 对应真实状态条场景。</p>
+  </div>
+
+  <script src="../src/client/data.js"></script>
+  <script src="../src/client/index.js"></script>
+  <script>
+    'use strict';
+    // 模拟客户端 cordis context：effect 立即执行并返回清理函数
+    const fakeCtx = { effect: (fn) => fn() };
+    let stop = null;
+
+    function start() {
+      stop && stop();
+      stop = apply(fakeCtx);
+    }
+    function setConfig(key, value) {
+      try { localStorage.setItem('dsh-thought-buddy.' + key, value); } catch {}
+    }
+
+    const btnAvatar = document.getElementById('btn-avatar');
+    const btnEmoji = document.getElementById('btn-emoji');
+    const sizeInput = document.getElementById('size');
+    const btnToggle = document.getElementById('btn-toggle-status');
+    const btnReload = document.getElementById('btn-reload');
+    const host = document.getElementById('chat-host');
+    const hostBig = document.getElementById('chat-host-big');
+
+    function syncModeButtons(mode) {
+      btnAvatar.classList.toggle('active', mode === 'avatar');
+      btnEmoji.classList.toggle('active', mode === 'emoji');
+    }
+
+    btnAvatar.addEventListener('click', () => {
+      setConfig('mode', 'avatar');
+      syncModeButtons('avatar');
+      start();
+    });
+    btnEmoji.addEventListener('click', () => {
+      setConfig('mode', 'emoji');
+      syncModeButtons('emoji');
+      start();
+    });
+    sizeInput.addEventListener('input', () => {
+      setConfig('size', sizeInput.value);
+      start();
+    });
+    btnToggle.addEventListener('click', () => {
+      const status = host.querySelector('.turn-status');
+      const statusBig = hostBig.querySelector('.turn-status');
+      if (status) {
+        status.remove();
+        statusBig.remove();
+        btnToggle.textContent = '显示状态条';
+      } else {
+        const make = () => {
+          const div = document.createElement('div');
+          div.className = 'turn-status';
+          div.setAttribute('role', 'status');
+          div.setAttribute('aria-live', 'polite');
+          div.textContent = 'Deep diving...';
+          return div;
+        };
+        const row = () => {
+          const r = document.createElement('div');
+          r.className = 'status-row';
+          r.appendChild(make());
+          return r;
+        };
+        host.appendChild(row());
+        hostBig.appendChild(row());
+        btnToggle.textContent = '隐藏 / 显示状态条';
+      }
+    });
+    btnReload.addEventListener('click', () => {
+      stop && stop();
+      // 清掉已挂载节点再重启，模拟插件热重载
+      host.querySelectorAll('[data-thought-buddy]').forEach((n) => n.remove());
+      hostBig.querySelectorAll('[data-thought-buddy]').forEach((n) => n.remove());
+      start();
+    });
+
+    start();
+  </script>
+</body>
+</html>
