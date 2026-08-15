@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="./docs/banner.png" alt="dsh-thought-buddy banner" style="max-width: 720px; width: 100%">
+
 # dsh-thought-buddy
 
 **DeepSeek Harness Web 插件：在「Deep diving...」状态提示前，放一只动态小伙伴——GrokBot 风格动画头像，状态文字还会同步打字机变换。**
@@ -21,6 +23,8 @@
 `dsh-thought-buddy` 是 [DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/) Web GUI 的纯客户端插件。模型工作时，那行 `Deep diving...` 状态条前多了一只 Grok 风格的小机器人头像：眨眼、弹簧形变换表情、视线游移、整体轻摆——全部由 **纯 SVG + `requestAnimationFrame`** 实时绘制，零运行时依赖。每次头像切换表情，状态文字还会以**打字机效果**变换（先逐字符删除，再逐字打出下一个词）。
 
 头像动画移植自 [nasawz/GrokBot](https://github.com/nasawz/GrokBot)（纯 Flutter `CustomPaint` 控件）：25 种表情 × 2 眼 × 48 点眼环、18 种身体形态、39 种状态的表情池与眨眼节奏全部保留。
+
+![效果预览 —— Deep diving 状态前的动态 GrokBot 头像](./docs/img.png)
 
 ## 功能
 

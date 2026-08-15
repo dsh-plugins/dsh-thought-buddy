@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="./docs/banner.png" alt="dsh-thought-buddy banner" style="max-width: 720px; width: 100%">
+
 # dsh-thought-buddy
 
 **A DeepSeek Harness Web plugin that puts a dynamic little buddy — a GrokBot-style animated avatar with a synchronized typewriter status line — right in front of the "Deep diving..." indicator.**
@@ -21,6 +23,8 @@ English | [简体中文](README.zh_CN.md)
 `dsh-thought-buddy` is a pure client-side plugin for the [DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/) Web GUI. While the model is working, the status pill that reads `Deep diving...` grows a tiny Grok-style robot avatar: it blinks, swaps expressions with a springy morph, wanders its gaze, and gently bobs — all drawn live as **SVG via `requestAnimationFrame`**, with zero runtime dependencies. Every time the avatar switches expression, the status text rewrites itself with a typewriter effect (deleting character by character, then typing out the next word).
 
 The avatar animation is ported from [nasawz/GrokBot](https://github.com/nasawz/GrokBot) (a pure Flutter `CustomPaint` widget) to the web: all 25 expressions × 2 eyes × 48-point eye rings, 18 body shapes, and 39 states with their expression/blink cadences are preserved.
+
+![Effect preview — animated GrokBot avatar in front of the Deep diving... status](./docs/img.png)
 
 ## Features
 
