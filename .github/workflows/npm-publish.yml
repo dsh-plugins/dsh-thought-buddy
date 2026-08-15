@@ -34,7 +34,9 @@ jobs:
         uses: actions/setup-node@v6.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
-      # The package has zero dependencies — build and verify are plain Node scripts.
+      # Runtime stays dependency-free; the build needs the typescript devDependency.
+      - name: Install dependencies
+        run: npm ci
       - name: Build package
         run: npm run build
       - name: Verify client bundle
@@ -43,14 +45,14 @@ jobs:
         run: npm run check
       # ref/ is git-ignored, so the upstream data sources are absent in CI;
       # when they are present (local repo with the reference clone), assert the
-      # generated data.js is in sync with the Dart sources.
+      # generated data.ts is in sync with the Dart sources.
       - name: Regenerate data when reference is present
         if: hashFiles('ref/GrokBot/lib/src/data/*.dart') != ''
         shell: bash
         run: |
           set -euo pipefail
           npm run gen
-          git diff --exit-code -- src/client/data.js
+          git diff --exit-code -- src/client/data.ts
       - name: Inspect npm package contents
         run: npm pack --dry-run
 
@@ -72,6 +74,8 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: ${{ env.NPM_REGISTRY }}
+      - name: Install dependencies
+        run: npm ci
       - name: Resolve publish version
         id: release
         shell: bash

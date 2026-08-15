@@ -1,6 +1,6 @@
 {
   "name": "@dsh-plugin/dsh-thought-buddy",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "DSH web 插件：在「Deep diving...」状态前插入一个动态小表情 —— GrokBot 风格动画头像（纯 SVG + rAF，移植自 nasawz/GrokBot，无任何运行时依赖），也可切换为 emoji 轮播模式",
   "type": "module",
   "main": "lib/index.js",
@@ -19,10 +19,11 @@
   ],
   "scripts": {
     "gen": "node scripts/gen-data.mjs",
-    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.client.json && node scripts/build.mjs",
     "verify": "node test/verify.mjs",
     "check": "node scripts/check-workflows.mjs",
-    "prepublishOnly": "npm run build && npm run verify"
+    "prepublishOnly": "npm run typecheck && npm run build && npm run verify"
   },
   "publishConfig": {
     "access": "public"
@@ -57,5 +58,8 @@
     "grokbot",
     "avatar",
     "emoji"
-  ]
+  ],
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
 }

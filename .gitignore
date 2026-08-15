@@ -4,6 +4,8 @@ ref/
 # 构建产物与依赖
 node_modules/
 lib/
+.build/
+.npm-cache/
 *.log
 
 # 本地验证截图

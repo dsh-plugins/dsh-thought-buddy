@@ -1,15 +1,19 @@
 #!/usr/bin/env node
 /**
- * build.mjs — 组装 DSH web 客户端 bundle 与宿主产物，无需任何 npm 依赖：
+ * build.mjs — 组装 DSH web 客户端 bundle：
  *
- *   lib/client.js  浏览器半区：data.js + index.js 包进 window.__ModuleLoader__
- *                  CJS 工厂契约（id = 完整包名），并导出 apply / inject。
- *   lib/index.js   宿主半区：src/index.js 原样复制（node ESM）。
+ *   lib/client.js  浏览器半区：tsc 编译后的 data.js + index.js（.build/client/）
+ *                  包进 window.__ModuleLoader__ CJS 工厂契约（id = 完整包名），
+ *                  并导出 apply / inject。
  *
- * 两个客户端源文件必须是「纯脚本」（无 ESM import/export）；构建时做一次
+ * 宿主半区 lib/index.js 由 `tsc -p tsconfig.json` 直接输出（node ESM）。
+ * 编译在 package.json 的 build 脚本里先于本脚本执行：
+ *   npm run build → tsc -p tsconfig.json && tsc -p tsconfig.client.json && node scripts/build.mjs
+ *
+ * 两个客户端编译产物必须是「纯脚本」（无 ESM import/export）；此处做一次
  * 语句级检查兜底。
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -30,10 +34,10 @@ function assertPlainScript(source, label) {
   }
 }
 
-const dataSource = read('src/client/data.js')
-const clientSource = read('src/client/index.js')
-assertPlainScript(dataSource, 'src/client/data.js')
-assertPlainScript(clientSource, 'src/client/index.js')
+const dataSource = read('.build/client/data.js')
+const clientSource = read('.build/client/index.js')
+assertPlainScript(dataSource, '.build/client/data.js')
+assertPlainScript(clientSource, '.build/client/index.js')
 
 const banner = `window.__ModuleLoader__.load({
 \tid: ${JSON.stringify(PLUGIN_ID)},
@@ -51,8 +55,7 @@ const footer = `
 
 mkdirSync(join(root, 'lib'), { recursive: true })
 writeFileSync(join(root, 'lib', 'client.js'), banner + dataSource + '\n' + clientSource + footer)
-writeFileSync(join(root, 'lib', 'index.js'), read('src/index.js'))
 
-const clientBytes = (await import('node:fs')).statSync(join(root, 'lib', 'client.js')).size
+const clientBytes = statSync(join(root, 'lib', 'client.js')).size
 console.log(`ok: lib/client.js (${clientBytes} bytes)`)
 console.log(`ok: lib/index.js (${readFileSync(join(root, 'lib', 'index.js'), 'utf8').length} bytes)`)

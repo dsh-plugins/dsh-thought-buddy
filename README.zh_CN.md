@@ -46,7 +46,7 @@
 
 步骤：
 1. 添加插件依赖：`dsh plugin --profile <PROFILE> add @dsh-plugin/dsh-thought-buddy`（或我 profile 对应的插件管理命令）。
-2. 验证 `node_modules/@dsh-plugin/dsh-thought-buddy` 能解析且包含构建好的 `lib/` 目录（至少 `lib/index.js` 与 `lib/client.js`）。构建零依赖（纯 Node 脚本）；若产物缺失，在插件目录运行 `npm run build` 后重新添加。
+2. 验证 `node_modules/@dsh-plugin/dsh-thought-buddy` 能解析且包含构建好的 `lib/` 目录（至少 `lib/index.js` 与 `lib/client.js`）。运行时零依赖；构建 TypeScript 源码需要 `typescript` devDependency（先 `npm ci` / `npm install` 一次）。若产物缺失，在插件目录运行 `npm run build` 后重新添加。
 3. 确认 profile 清单的 `dsh.profile.bundles` 包含 `@dsh-plugin/dsh-thought-buddy` —— bundle patch（`cordis.patch.yml`）会在启动时自动插入插件行。
 4. 不要启动 profile —— 只安装与验证，然后汇报你改了什么。
 ```
@@ -63,7 +63,7 @@
 "dsh": { "profile": { "bundles": [ /* ... */, "@dsh-plugin/dsh-thought-buddy" ] } }
 ```
 
-1. 构建产物：`npm run build`（或 `node scripts/build.mjs`）生成 `lib/client.js` + `lib/index.js`
+1. 构建产物：`npm run build`（编译 TypeScript）生成 `lib/client.js` + `lib/index.js`
 2. profile 内 `pnpm install`（离线亦可）
 3. **重启 `dsh web`** —— 客户端模块清单在启动时组合，新 bundle 需要重启生效
 4. 刷新页面后，给模型发一条消息
@@ -90,24 +90,34 @@ location.reload()
 dsh-thought-buddy/
 ├── ref/GrokBot/            # 参考项目（git 忽略，只读）
 ├── src/
-│   ├── index.js            # 宿主半区（no-op 挂载行）
+│   ├── index.ts            # 宿主半区（no-op 挂载行）
 │   └── client/
-│       ├── data.js         # 生成数据：25 表情 × 2 眼 × 48 点、18 形态、39 状态
-│       └── index.js        # 客户端引擎：SVG 头像 + 打字机 + 观察器 + apply()
+│       ├── data.ts         # 生成数据：25 表情 × 2 眼 × 48 点、18 形态、39 状态（带类型）
+│       └── index.ts        # 客户端引擎：SVG 头像 + 打字机 + 观察器 + apply()
 ├── scripts/
-│   ├── gen-data.mjs        # 从 ref/GrokBot 的 Dart 数据源重新生成 data.js
-│   └── build.mjs           # 组装 lib/client.js（__ModuleLoader__ 契约）与 lib/index.js
+│   ├── gen-data-lib.mjs    # Dart 解析 + data.ts 渲染的纯函数库
+│   ├── gen-data.mjs        # 从 ref/GrokBot 的 Dart 数据源重新生成 data.ts
+│   └── build.mjs           # 组装 lib/client.js（__ModuleLoader__ 契约，基于 tsc 产物）
 ├── test/verify.mjs         # 无浏览器测试：直接执行构建产物（SVG/节奏/打字机）
+├── tsconfig.json           # 宿主半区编译：src/index.ts → lib/（node ESM）
+├── tsconfig.client.json    # 客户端半区编译：src/client/*.ts → .build/client/（纯脚本）
 ├── demo/                   # 本地预览（node demo/server.mjs → 4173）
 └── cordis.patch.yml        # bundle patch：插入 thought-buddy 行
 ```
 
 ```sh
+npm install           # 一次性：安装 typescript devDependency
 npm run gen           # 更新数据（上游 GrokBot 数据变更后）
-npm run build         # 构建 lib/ 产物
+npm run typecheck     # 类型检查两个半区（不产出）
+npm run build         # 编译 TS → lib/ + .build/client/，再组装 lib/client.js
 npm run verify        # 全量无浏览器验证
-node demo/server.mjs 4173   # 预览 http://127.0.0.1:4173/demo/demo.html
+node demo/server.mjs 4173   # 预览 http://127.0.0.1:4173/demo/demo.html（需先 npm run build）
 ```
+
+> 客户端半区以 TypeScript「纯脚本」编写（无 `import`/`export`，类型与数据共享全局
+> 作用域）：`tsc` 编译为纯 JS 到 `.build/client/`，`scripts/build.mjs` 把两个文件
+> 按 data → index 的固定顺序拼接进 `window.__ModuleLoader__` 工厂，与原先的
+> loader 契约完全一致。
 
 ## 架构
 

@@ -48,7 +48,7 @@ Install the @dsh-plugin/dsh-thought-buddy plugin into the profile I specify (or 
 
 Steps:
 1. Add the plugin dependency: `dsh plugin --profile <PROFILE> add @dsh-plugin/dsh-thought-buddy` (or the equivalent plugin-manager command for my profile).
-2. Verify `node_modules/@dsh-plugin/dsh-thought-buddy` resolves and holds a built `lib/` directory (at least `lib/index.js` and `lib/client.js`). The build is dependency-free (plain Node scripts); if the artifacts are missing, run `npm run build` in the plugin directory and re-add.
+2. Verify `node_modules/@dsh-plugin/dsh-thought-buddy` resolves and holds a built `lib/` directory (at least `lib/index.js` and `lib/client.js`). The runtime has no dependencies; building the TypeScript sources needs the `typescript` devDependency (`npm ci`/`npm install` once). If the artifacts are missing, run `npm run build` in the plugin directory and re-add.
 3. Make sure the profile manifest's `dsh.profile.bundles` includes `@dsh-plugin/dsh-thought-buddy` — the bundle patch (`cordis.patch.yml`) inserts the plugin row automatically at boot.
 4. Do not start the profile — install and verify only, then report what you changed.
 ```
@@ -65,7 +65,7 @@ For local development, wire the plugin into a web profile via a `link:` dependen
 "dsh": { "profile": { "bundles": [ /* ... */, "@dsh-plugin/dsh-thought-buddy" ] } }
 ```
 
-1. Build the artifacts: `npm run build` (or `node scripts/build.mjs`) → produces `lib/client.js` + `lib/index.js`
+1. Build the artifacts: `npm run build` → compiles TypeScript and produces `lib/client.js` + `lib/index.js`
 2. In the profile, run `pnpm install` (works offline)
 3. **Restart `dsh web`** — the client-module manifest is composed at boot, so a new bundle needs a restart
 4. Refresh the page and send the model a message
@@ -92,24 +92,35 @@ location.reload()
 dsh-thought-buddy/
 ├── ref/GrokBot/            # reference project (git-ignored, read-only)
 ├── src/
-│   ├── index.js            # host half (no-op mount row)
+│   ├── index.ts            # host half (no-op mount row)
 │   └── client/
-│       ├── data.js         # generated data: 25 expressions × 2 eyes × 48 points, 18 shapes, 39 states
-│       └── index.js        # client engine: SVG avatar + typewriter + observer + apply()
+│       ├── data.ts         # generated typed data: 25 expressions × 2 eyes × 48 points, 18 shapes, 39 states
+│       └── index.ts        # client engine: SVG avatar + typewriter + observer + apply()
 ├── scripts/
-│   ├── gen-data.mjs        # regenerates data.js from ref/GrokBot's Dart sources
-│   └── build.mjs           # assembles lib/client.js (__ModuleLoader__ contract) + lib/index.js
+│   ├── gen-data-lib.mjs    # Dart parsing + data.ts rendering helpers
+│   ├── gen-data.mjs        # regenerates data.ts from ref/GrokBot's Dart sources
+│   └── build.mjs           # assembles lib/client.js (__ModuleLoader__ contract) from tsc output
 ├── test/verify.mjs         # browserless tests against the built bundle (SVG, pacing, typewriter)
+├── tsconfig.json           # host-half compile: src/index.ts → lib/ (node ESM)
+├── tsconfig.client.json    # client-half compile: src/client/*.ts → .build/client/ (plain scripts)
 ├── demo/                   # local preview (node demo/server.mjs → 4173)
 └── cordis.patch.yml        # bundle patch: inserts the thought-buddy row
 ```
 
 ```sh
+npm install           # once — installs the typescript devDependency
 npm run gen           # refresh data (after upstream GrokBot data changes)
-npm run build         # build lib/ artifacts
+npm run typecheck     # type-check both halves (no emit)
+npm run build         # compile TS → lib/ + .build/client/, then assemble lib/client.js
 npm run verify        # full browserless verification
-node demo/server.mjs 4173   # preview http://127.0.0.1:4173/demo/demo.html
+node demo/server.mjs 4173   # preview http://127.0.0.1:4173/demo/demo.html (run npm run build first)
 ```
+
+> The client half is written as TypeScript "plain scripts" (no `import`/`export`,
+> so the types and data stay in one global scope). `tsc` compiles them to plain
+> JS in `.build/client/`, and `scripts/build.mjs` concatenates the two files into
+> the `window.__ModuleLoader__` factory — the same loader contract as before.
+> `data.ts` must be evaluated before `index.ts` (build order is fixed).
 
 ## Architecture
 

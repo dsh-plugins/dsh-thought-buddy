@@ -91,8 +91,9 @@
     <p class="hint">拖动上方「大小」滑杆可调，最小 14px 对应真实状态条场景。</p>
   </div>
 
-  <script src="../src/client/data.js"></script>
-  <script src="../src/client/index.js"></script>
+  <!-- 编译产物（npm run build 生成；源码为 TypeScript） -->
+  <script src="../.build/client/data.js"></script>
+  <script src="../.build/client/index.js"></script>
   <script>
     'use strict';
     // 模拟客户端 cordis context：effect 立即执行并返回清理函数

@@ -1,3 +1,4 @@
+/// <reference path="./data.ts" />
 /* ============================================================================
  * dsh-thought-buddy — 客户端半区
  *
@@ -8,8 +9,9 @@
  *     球面转头投影与视线游移。
  *   - emoji 模式：在可配置的 emoji 列表间轮播，带弹跳入场动画。
  *
- * 本文件是「纯脚本」（无 ESM import/export），由 scripts/build.mjs 与
- * data.js 一起包进 window.__ModuleLoader__ 工厂；data.js 必须先于本文件求值。
+ * 本文件与 data.ts 均为「纯脚本」（无 ESM import/export，类型与数据在全局
+ * 作用域共享），由 tsc 编译为 JS 后，scripts/build.mjs 将编译产物与 data.ts
+ * 的编译产物一起包进 window.__ModuleLoader__ 工厂；data.js 必须先于本文件求值。
  * ========================================================================== */
 'use strict';
 
@@ -17,7 +19,15 @@
 
 const TB_NS = 'dsh-thought-buddy';
 
-function tbRead(key, fallback) {
+interface TbConfig {
+  enabled: boolean;
+  /** 'avatar' | 'emoji' */
+  mode: 'avatar' | 'emoji';
+  size: number;
+  emojis: string[];
+}
+
+function tbRead(key: string, fallback: string): string {
   try {
     const raw = localStorage.getItem(`${TB_NS}.${key}`);
     return raw === null || raw === '' ? fallback : raw;
@@ -26,12 +36,11 @@ function tbRead(key, fallback) {
   }
 }
 
-function tbConfig() {
+function tbConfig(): TbConfig {
   const size = Number.parseInt(tbRead('size', '18'), 10);
   return {
     enabled: tbRead('enabled', '1') !== '0',
-    // 'avatar' | 'emoji'
-    mode: tbRead('mode', 'avatar'),
+    mode: tbRead('mode', 'avatar') === 'emoji' ? 'emoji' : 'avatar',
     size: Number.isFinite(size) && size >= 8 && size <= 64 ? size : 18,
     emojis: tbRead('emojis', '🤿 🫧 🌊 🐙 🔍 🧠 💭')
       .trim()
@@ -42,7 +51,7 @@ function tbConfig() {
 
 /* ============================= 注入的样式 ============================= */
 
-function tbInjectStyles() {
+function tbInjectStyles(): void {
   const pluginId = '@dsh-plugin/dsh-thought-buddy';
   const tagId = `${pluginId}/styles.css`;
   if (document.querySelector(`style[data-plugin-css="${tagId}"]`) !== null) return;
@@ -80,16 +89,21 @@ const TB_FACE_CENTER = 114.2705;
 const TB_VIEWBOX = 259;
 const TB_INSET = 15;
 
-function tbClamp(value, min, max) {
+interface TbRadius {
+  rx: number;
+  ry: number;
+}
+
+function tbClamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function tbFmt(n) {
+function tbFmt(n: number): string {
   const r = Math.round(n * 100) / 100;
   return Object.is(r, -0) ? '0' : String(r);
 }
 
-function tbExpandRadius(values) {
+function tbExpandRadius(values: string[]): string[] {
   if (values.length === 0) return ['0', '0', '0', '0'];
   if (values.length === 1) return [values[0], values[0], values[0], values[0]];
   if (values.length === 2) return [values[0], values[1], values[0], values[1]];
@@ -97,7 +111,7 @@ function tbExpandRadius(values) {
   return values.slice(0, 4);
 }
 
-function tbParseRadiusToken(token, axisSize) {
+function tbParseRadiusToken(token: string, axisSize: number): number {
   const value = String(token).trim();
   if (value.endsWith('%')) {
     const percent = Number.parseFloat(value);
@@ -108,7 +122,7 @@ function tbParseRadiusToken(token, axisSize) {
 }
 
 /** 与 geometry.dart 的 parseBorderRadius 等价：支持 1-4 值与 '/' 椭圆语法，并做相邻角钳制。 */
-function tbParseRadii(css, width, height) {
+function tbParseRadii(css: string, width: number, height: number): TbRadius[] {
   const parts = String(css).split('/');
   const horizontal = tbExpandRadius(
     parts[0].trim().split(/\s+/).filter(Boolean),
@@ -117,11 +131,11 @@ function tbParseRadii(css, width, height) {
   const vertical = tbExpandRadius(
     verticalSource.trim().split(/\s+/).filter(Boolean),
   );
-  const radii = [0, 1, 2, 3].map((i) => ({
+  const radii: TbRadius[] = [0, 1, 2, 3].map((i) => ({
     rx: tbParseRadiusToken(horizontal[i], width),
     ry: tbParseRadiusToken(vertical[i], height),
   }));
-  const clampPair = (a, b, size, horizontalAxis) => {
+  const clampPair = (a: number, b: number, size: number, horizontalAxis: boolean): void => {
     const first = horizontalAxis ? radii[a].rx : radii[a].ry;
     const second = horizontalAxis ? radii[b].rx : radii[b].ry;
     const sum = first + second;
@@ -143,14 +157,14 @@ function tbParseRadii(css, width, height) {
 }
 
 /** 形态 → SVG 圆角矩形路径（椭圆角，对应 RRect.fromRectAndCorners）。 */
-function tbBodyPath(shape) {
+function tbBodyPath(shape: TbShape): string {
   const width = 210 * shape.aspectX;
   const height = 210 * shape.aspectY;
   const left = TB_FACE_CENTER - width / 2;
   const top = TB_FACE_CENTER - height / 2;
   const radii = tbParseRadii(shape.radius, width, height);
   const [tl, tr, br, bl] = radii;
-  const arc = (r, x2, y2) =>
+  const arc = (r: TbRadius, x2: number, y2: number): string =>
     r.rx <= 0 || r.ry <= 0
       ? ` L ${tbFmt(x2)} ${tbFmt(y2)}`
       : ` A ${tbFmt(r.rx)} ${tbFmt(r.ry)} 0 0 1 ${tbFmt(x2)} ${tbFmt(y2)}`;
@@ -166,7 +180,7 @@ function tbBodyPath(shape) {
   return d + ' Z';
 }
 
-function tbSquashTransform(scale) {
+function tbSquashTransform(scale: number): string | null {
   if (scale === 1) return null;
   return (
     `translate(${TB_FACE_CENTER} ${TB_FACE_CENTER}) ` +
@@ -178,7 +192,7 @@ function tbSquashTransform(scale) {
 /* ============================= 打字机文字 ============================= */
 
 /** 表情切换时状态条文字轮换的候选词（用户提供）。 */
-const TB_WORDS = [
+const TB_WORDS: string[] = [
   'Accomplishing', 'Actioning', 'Actualizing', 'Baking', 'Brewing',
   'Calculating', 'Cerebrating', 'Churning', 'Coalescing', 'Cogitating',
   'Computing', 'Conjuring', 'Considering', 'Cooking', 'Crafting',
@@ -192,17 +206,22 @@ const TB_WORDS = [
   'Synthesizing', 'Thinking', 'Transmuting', 'Vibing', 'Working',
 ];
 
+interface TbTypewriter {
+  switchWord(): void;
+  stop(): void;
+}
+
 /**
  * 在 turnStatus 上挂打字机：每次表情切换调用 switchWord()，
  * 先逐字符删除当前文字，停顿后逐字符打出列表中的下一个词（带 "..."）。
  * React 渲染的文本 fiber 的 children 字符串始终不变，因此不会覆盖我们的修改。
  * 返回 { switchWord, stop }；root 卸载时 stop() 由观察器清理。
  */
-function tbStartTypewriter(root) {
-  let textNode = null;
+function tbStartTypewriter(root: Element): TbTypewriter | null {
+  let textNode: Text | null = null;
   for (const node of root.childNodes) {
     if (node.nodeType === 3) {
-      textNode = node;
+      textNode = node as Text;
       break;
     }
   }
@@ -211,10 +230,10 @@ function tbStartTypewriter(root) {
   const DELETE_MS = 40;
   const TYPE_MS = 46;
   const HOLD_MS = 420;
-  let timer = null;
+  let timer: number | null = null;
   let wordIndex = -1;
 
-  const pickNext = () => {
+  const pickNext = (): string => {
     if (TB_WORDS.length === 0) return 'Deep diving';
     let next = wordIndex;
     while (next === wordIndex) {
@@ -224,14 +243,14 @@ function tbStartTypewriter(root) {
     return TB_WORDS[next];
   };
 
-  const clearTimer = () => {
+  const clearTimer = (): void => {
     if (timer !== null) {
       clearInterval(timer);
       timer = null;
     }
   };
 
-  const startTyping = (word) => {
+  const startTyping = (word: string): void => {
     let i = 0;
     timer = setInterval(() => {
       if (!root.isConnected) {
@@ -249,14 +268,14 @@ function tbStartTypewriter(root) {
   };
 
   /** 删除当前文字 → 停顿 → 逐字打出下一个词。 */
-  const switchWord = () => {
+  const switchWord = (): void => {
     clearTimer();
     timer = setInterval(() => {
       if (!root.isConnected) {
         clearTimer();
         return;
       }
-      const t = textNode.textContent;
+      const t = textNode.textContent ?? '';
       if (t.length <= 1) {
         clearTimer();
         textNode.textContent = '';
@@ -278,9 +297,24 @@ function tbStartTypewriter(root) {
 
 /* ============================= 头像引擎 ============================= */
 
+interface TbEngine {
+  svg: SVGSVGElement;
+  body: SVGPathElement;
+  clipBody: SVGPathElement;
+  eyeL: SVGPolygonElement;
+  eyeR: SVGPolygonElement;
+  shape: TbShape;
+  /** 挂载后的宿主元素；tbBuildSvg 之后由 tbMountAvatar 填入。 */
+  root: Element | null;
+}
+
+interface TbHandle {
+  stop(): void;
+}
+
 let tbClipSeq = 0;
 
-function tbCentroid(ring) {
+function tbCentroid(ring: TbEyeRing): { x: number; y: number } {
   let x = 0;
   let y = 0;
   for (const p of ring) {
@@ -290,29 +324,29 @@ function tbCentroid(ring) {
   return { x: x / ring.length, y: y / ring.length };
 }
 
-function tbLerpRings(current, target, amount) {
-  return [0, 1].map((eye) =>
-    current[eye].map((p, i) => {
+function tbLerpRings(current: TbExpression, target: TbExpression, amount: number): TbExpression {
+  return [0, 1].map((eye): TbEyeRing =>
+    current[eye].map((p, i): TbPoint => {
       const q = target[eye][i];
       return [
         p[0] + (q[0] - p[0]) * amount,
         p[1] + (q[1] - p[1]) * amount,
       ];
     }),
-  );
+  ) as TbExpression;
 }
 
-function tbRandInt(min, max) {
+function tbRandInt(min: number, max: number): number {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
-function tbTheme(dark) {
+function tbTheme(dark: boolean): { body: string; eye: string } {
   return dark
     ? { body: '#6689ea', eye: '#181a15' }
     : { body: '#5b7fe5', eye: '#fffdf7' };
 }
 
-function tbBuildSvg(cfg, dark) {
+function tbBuildSvg(cfg: TbConfig, dark: boolean): TbEngine {
   const ns = 'http://www.w3.org/2000/svg';
   const shape = TB_SHAPES.blob;
   const theme = tbTheme(dark);
@@ -351,7 +385,7 @@ function tbBuildSvg(cfg, dark) {
   root.appendChild(eyes);
   svg.appendChild(root);
 
-  return { svg, body, clipBody, eyeL, eyeR, shape };
+  return { svg, body, clipBody, eyeL, eyeR, shape, root: null };
 }
 
 /**
@@ -359,7 +393,11 @@ function tbBuildSvg(cfg, dark) {
  * 逐帧移植 _GrokBotState._onTick：弹簧表情形变、表情池轮换、320ms 眨眼、
  * 球面转头投影 + 视线游移 + 轻微摆动。每次表情轮换时调用 onExpression()。
  */
-function tbRunAvatar(engine, cfg, onExpression) {
+function tbRunAvatar(
+  engine: TbEngine,
+  cfg: TbConfig,
+  onExpression?: () => void,
+): { stop(): void } {
   const state = TB_STATES.thinking;
   const pool = state.expressions;
   const reduced =
@@ -367,28 +405,29 @@ function tbRunAvatar(engine, cfg, onExpression) {
     matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   let currentIdx = pool[0];
-  let current = TB_EXPRESSIONS[currentIdx];
-  let target = current;
+  let current: TbExpression = TB_EXPRESSIONS[currentIdx];
+  let target: TbExpression = current;
   let morph = 1;
   let velocity = 0;
   let blinkT = -1;
+  // 生成器保证 blinkMin/blinkMax 同为 null 或同为数字。
   let blinkAt =
     state.blinkMin == null
       ? Infinity
-      : performance.now() + tbRandInt(state.blinkMin, state.blinkMax);
+      : performance.now() + tbRandInt(state.blinkMin, state.blinkMax!);
   let exprAt = performance.now() + tbRandInt(state.expressionMin, state.expressionMax);
   let raf = 0;
   let t0 = 0;
   let last = 0;
   const springFreq = 7;
 
-  const blinkScale = () => {
+  const blinkScale = (): number => {
     if (blinkT < 0) return 1;
     const p = blinkT / 0.32;
     return Math.max(p < 0.42 ? 1 - p / 0.42 : (p - 0.42) / 0.58, 0.04);
   };
 
-  const draw = (rings, turn, gazeX, gazeY) => {
+  const draw = (rings: TbExpression, turn: number, gazeX: number, gazeY: number): void => {
     const { shape, eyeL, eyeR, body, clipBody } = engine;
     const bodyScale = shape.squashOnTurn ? Math.max(Math.cos(turn), 0.55) : 1;
     const squash = tbSquashTransform(bodyScale);
@@ -406,7 +445,7 @@ function tbRunAvatar(engine, cfg, onExpression) {
     const polys = [eyeL, eyeR];
 
     for (let i = 0; i < 2; i++) {
-      const corrected = rings[i].map((p) => [
+      const corrected = rings[i].map((p): TbPoint => [
         origin.x + (p[0] - TB_FACE_CENTER) * shape.faceScaleX,
         origin.y + (p[1] - TB_FACE_CENTER) * shape.faceScaleY,
       ]);
@@ -444,8 +483,8 @@ function tbRunAvatar(engine, cfg, onExpression) {
     }
   };
 
-  const tick = (ts) => {
-    if (!engine.root.isConnected) {
+  const tick = (ts: number): void => {
+    if (engine.root === null || !engine.root.isConnected) {
       stop();
       return;
     }
@@ -497,7 +536,8 @@ function tbRunAvatar(engine, cfg, onExpression) {
         blinkT = -1;
         // 重新调度下一次眨眼：相对当前时刻 + 随机 3.5–7s（与 Dart 原版
         // _scheduleBlink 的 Timer(_randomDuration(cadence)) 一致）。
-        blinkAt = now + tbRandInt(state.blinkMin, state.blinkMax);
+        // 能进入此分支说明 blinkMin 非 null，blinkMax 亦然（见生成器不变量）。
+        blinkAt = now + tbRandInt(state.blinkMin!, state.blinkMax!);
       }
     } else if (now >= blinkAt && state.blinkMin != null) {
       blinkT = 0;
@@ -511,7 +551,7 @@ function tbRunAvatar(engine, cfg, onExpression) {
     raf = requestAnimationFrame(tick);
   };
 
-  const stop = () => {
+  const stop = (): void => {
     if (raf) cancelAnimationFrame(raf);
     raf = 0;
   };
@@ -521,7 +561,7 @@ function tbRunAvatar(engine, cfg, onExpression) {
 }
 
 /** 在一个 turnStatus 元素上挂载 GrokBot 头像 + 表情联动的打字机文字。 */
-function tbMountAvatar(root, cfg) {
+function tbMountAvatar(root: Element, cfg: TbConfig): TbHandle | null {
   if (root.querySelector('[data-thought-buddy]') !== null) return null;
   const dark =
     typeof matchMedia === 'function' &&
@@ -543,7 +583,7 @@ function tbMountAvatar(root, cfg) {
 }
 
 /** 在一个 turnStatus 元素上挂载 emoji 轮播。 */
-function tbMountEmoji(root, cfg) {
+function tbMountEmoji(root: Element, cfg: TbConfig): TbHandle | null {
   if (root.querySelector('[data-thought-buddy]') !== null) return null;
   const span = document.createElement('span');
   span.setAttribute('data-thought-buddy', 'emoji');
@@ -579,23 +619,23 @@ function tbMountEmoji(root, cfg) {
  * 内的 [role="status"]）前插入小表情。React 重渲染不会触碰我们插入的节点；
  * 万一被清掉，下一帧 mutation 会补回。返回清理函数。
  */
-function tbStart() {
+function tbStart(): () => void {
   const cfg = tbConfig();
   if (!cfg.enabled) return () => {};
   tbInjectStyles();
 
-  const mounted = new Map(); // statusEl -> handle
+  const mounted = new Map<Element, TbHandle>(); // statusEl -> handle
 
-  const scan = () => {
-    const roots = new Set();
+  const scan = (): void => {
+    const roots = new Set<Element>();
     // 主路径：会话滚动容器内的状态条；辅路径：任意含 "diving" 文案的 status。
     for (const el of document.querySelectorAll(
       '[data-conversation-scroll] [role="status"]',
     )) {
-      if (/diving/i.test(el.textContent)) roots.add(el);
+      if (/diving/i.test(el.textContent ?? '')) roots.add(el);
     }
     for (const el of document.querySelectorAll('[role="status"]')) {
-      if (/diving/i.test(el.textContent)) roots.add(el);
+      if (/diving/i.test(el.textContent ?? '')) roots.add(el);
     }
     for (const el of roots) {
       if (mounted.has(el)) continue;
@@ -637,8 +677,13 @@ function tbStart() {
 // cordis 服务依赖：本插件只用 ctx.effect，不消费任何服务，故为空。
 // 注意：这里的 inject 是 cordis 服务名（由 runtime 等提供），
 // 与 package.json 的 dsh.client.inject（客户端模块依赖声明）不是一回事。
-const inject = [];
+const inject: unknown[] = [];
 
-function apply(ctx) {
+/** 客户端 cordis Context 的最小结构（本插件只用 ctx.effect）。 */
+interface TbClientContext {
+  effect(callback: () => () => void): unknown;
+}
+
+function apply(ctx: TbClientContext) {
   ctx.effect(() => tbStart());
 }
