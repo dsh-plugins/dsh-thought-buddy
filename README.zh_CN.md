@@ -35,13 +35,22 @@
 
 ## 安装
 
-从 npm 安装（推荐）：
+复制下面这段指令，粘贴给你的 DSH Agent（本 Web GUI 里的助手）。Agent 会替你完成安装与验证——无需手动操作 npm 或编辑 profile：
 
-```sh
-dsh plugin --profile web add @dsh-plugin/dsh-thought-buddy
+```text
+把 @dsh-plugin/dsh-thought-buddy 插件安装到我指定的 profile（如果我没说，先问我）。npm 包名是 `@dsh-plugin/dsh-thought-buddy`；可以使用 GitHub 源 `github:dsh-plugins/dsh-thought-buddy`，本地开发用 `file:<路径>` / `link:<路径>`。
+
+步骤：
+1. 添加插件依赖：`dsh plugin --profile <PROFILE> add @dsh-plugin/dsh-thought-buddy`（或我 profile 对应的插件管理命令）。
+2. 验证 `node_modules/@dsh-plugin/dsh-thought-buddy` 能解析且包含构建好的 `lib/` 目录（至少 `lib/index.js` 与 `lib/client.js`）。构建零依赖（纯 Node 脚本）；若产物缺失，在插件目录运行 `npm run build` 后重新添加。
+3. 确认 profile 清单的 `dsh.profile.bundles` 包含 `@dsh-plugin/dsh-thought-buddy` —— bundle patch（`cordis.patch.yml`）会在启动时自动插入插件行。
+4. 不要启动 profile —— 只安装与验证，然后汇报你改了什么。
+```
 ```
 
-重启 `dsh web`，刷新页面后给模型发一条消息，「Deep diving...」前即出现小伙伴。
+随后重启 `dsh web`，刷新页面后给模型发一条消息，「Deep diving...」前即出现小伙伴。所有运行期选项都通过 `localStorage` 配置（见下表），没有设置页。
+
+### 从本地检出安装（`link:`）
 
 本地开发时，插件以 `link:` 依赖接入 web profile（示例：`C:\Users\Administrator\.dsh\profiles\web`）：
 

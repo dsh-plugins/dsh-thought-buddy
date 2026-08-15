@@ -35,13 +35,24 @@ The avatar animation is ported from [nasawz/GrokBot](https://github.com/nasawz/G
 
 ## Install
 
-From npm (recommended):
+Copy the block below and paste it to your DSH agent (the assistant in this web
+GUI). The agent performs the install and verification for you — no manual npm
+or profile editing needed:
 
-```sh
-dsh plugin --profile web add @dsh-plugin/dsh-thought-buddy
+```text
+Install the @dsh-plugin/dsh-thought-buddy plugin into the profile I specify (or ask me if I didn't name one). The npm package name is `@dsh-plugin/dsh-thought-buddy`; use the GitHub source `github:dsh-plugins/dsh-thought-buddy`, or `file:<path>` / `link:<path>` for local development.
+
+Steps:
+1. Add the plugin dependency: `dsh plugin --profile <PROFILE> add @dsh-plugin/dsh-thought-buddy` (or the equivalent plugin-manager command for my profile).
+2. Verify `node_modules/@dsh-plugin/dsh-thought-buddy` resolves and holds a built `lib/` directory (at least `lib/index.js` and `lib/client.js`). The build is dependency-free (plain Node scripts); if the artifacts are missing, run `npm run build` in the plugin directory and re-add.
+3. Make sure the profile manifest's `dsh.profile.bundles` includes `@dsh-plugin/dsh-thought-buddy` — the bundle patch (`cordis.patch.yml`) inserts the plugin row automatically at boot.
+4. Do not start the profile — install and verify only, then report what you changed.
+```
 ```
 
-Restart `dsh web`, refresh the page, and send the model a message — the buddy appears in front of `Deep diving...`.
+Then restart `dsh web`, refresh the page, and send the model a message — the buddy appears in front of `Deep diving...`. All runtime options are set via `localStorage` (see below); there is no settings page.
+
+### Install from a local checkout (`link:`)
 
 For local development, wire the plugin into a web profile via a `link:` dependency (example: `C:\Users\Administrator\.dsh\profiles\web`):
 
