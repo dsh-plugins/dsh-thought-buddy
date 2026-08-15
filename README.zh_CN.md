@@ -50,7 +50,6 @@
 3. 确认 profile 清单的 `dsh.profile.bundles` 包含 `@dsh-plugin/dsh-thought-buddy` —— bundle patch（`cordis.patch.yml`）会在启动时自动插入插件行。
 4. 不要启动 profile —— 只安装与验证，然后汇报你改了什么。
 ```
-```
 
 随后重启 `dsh web`，刷新页面后给模型发一条消息，「Deep diving...」前即出现小伙伴。所有运行期选项都通过 `localStorage` 配置（见下表），没有设置页。
 

@@ -52,7 +52,6 @@ Steps:
 3. Make sure the profile manifest's `dsh.profile.bundles` includes `@dsh-plugin/dsh-thought-buddy` — the bundle patch (`cordis.patch.yml`) inserts the plugin row automatically at boot.
 4. Do not start the profile — install and verify only, then report what you changed.
 ```
-```
 
 Then restart `dsh web`, refresh the page, and send the model a message — the buddy appears in front of `Deep diving...`. All runtime options are set via `localStorage` (see below); there is no settings page.
 
