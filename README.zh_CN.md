@@ -4,6 +4,8 @@
 
 # dsh-thought-buddy
 
+<img src="./docs/effect.gif" alt="dsh-thought-buddy effect" style="max-width: 256px; width: 100%">
+
 **DeepSeek Harness Web 插件：在「Deep diving...」状态提示前，放一只动态小伙伴——GrokBot 风格动画头像，状态文字还会同步打字机变换。**
 
 [English](README.md) | 简体中文

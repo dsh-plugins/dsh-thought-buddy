@@ -4,6 +4,8 @@
 
 # dsh-thought-buddy
 
+<img src="./docs/effect.gif" alt="dsh-thought-buddy effect" style="max-width: 256px; width: 100%">
+
 **A DeepSeek Harness Web plugin that puts a dynamic little buddy — a GrokBot-style animated avatar with a synchronized typewriter status line — right in front of the "Deep diving..." indicator.**
 
 English | [简体中文](README.zh_CN.md)
