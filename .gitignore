@@ -13,3 +13,5 @@ demo/shot.png
 
 # 粘贴输入插件的工作区临时附件
 .dsh/
+
+.cache/

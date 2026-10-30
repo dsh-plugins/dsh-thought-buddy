@@ -116,6 +116,11 @@ function createHarness({ now = () => Date.now() } = {}) {
     Set,
     Map,
   }
+  context.preferences = { enabled: true, mode: 'avatar', size: 18, emojis: ['🤿','🫧'] }
+  context.window.__dshLoader__ = { config: {
+    read: async () => ({ value: context.preferences }),
+    subscribe: listener => { context.configChanged = listener; return () => { context.configChanged = undefined } },
+  } }
   createContext(context)
 
   /**
@@ -239,7 +244,7 @@ function check(ok, label) {
 {
   const h = createHarness()
   let cleanup = null
-  h.mod.apply({ effect: (fn) => { cleanup = fn(); return cleanup }, dshLoaderUi: h.uiStub })
+  await h.mod.apply({ effect: (fn) => { cleanup = fn(); return cleanup }, dshLoaderUi: h.uiStub })
   check(typeof cleanup === 'function', 'effect cleanup registered')
 
   const span = buddySpan(h, 'avatar')
@@ -286,9 +291,8 @@ function check(ok, label) {
 /* ================= 4) emoji 模式 ================= */
 {
   const h = createHarness()
-  h.context.localStorage.getItem = (key) =>
-    key === 'dsh-thought-buddy.mode' ? 'emoji' : null
-  h.mod.apply({ effect: (fn) => fn(), dshLoaderUi: h.uiStub })
+  h.context.preferences.mode = 'emoji'
+  await h.mod.apply({ effect: (fn) => fn(), dshLoaderUi: h.uiStub })
   const span = buddySpan(h, 'emoji')
   check(!!span && !!span.textContent, `emoji mode — glyph="${span?.textContent ?? ''}"`)
 }
@@ -297,7 +301,7 @@ function check(ok, label) {
 {
   let clock = 1000
   const h = createHarness({ now: () => clock })
-  h.mod.apply({ effect: (fn) => fn(), dshLoaderUi: h.uiStub })
+  await h.mod.apply({ effect: (fn) => fn(), dshLoaderUi: h.uiStub })
 
   // 模拟 ~22s：先让 baseline 稳定（取最大眼高），再检测眨眼帧
   const events = []
@@ -341,7 +345,7 @@ function check(ok, label) {
 {
   let clock = 1000
   const h = createHarness({ now: () => clock })
-  h.mod.apply({ effect: (fn) => fn(), dshLoaderUi: h.uiStub })
+  await h.mod.apply({ effect: (fn) => fn(), dshLoaderUi: h.uiStub })
 
   // 初始文字 = React 渲染的 "Deep diving..."
   check(h.textNode.textContent === 'Deep diving...', `initial status text = "${h.textNode.textContent}"`)
@@ -395,6 +399,27 @@ function check(ok, label) {
     /^[A-Za-z]+\.\.\.$/.test(h.textNode.textContent),
     `second cycle produced "${h.textNode.textContent}"`,
   )
+}
+
+/* ================= live config + late completion ================= */
+{
+  const h=createHarness(); let cleanup;
+  await h.mod.apply({effect:fn=>{cleanup=fn()},dshLoaderUi:h.uiStub});
+  h.context.preferences={...h.context.preferences,enabled:false}; h.context.configChanged();
+  await new Promise(resolve=>setImmediate(resolve));
+  check(!buddySpan(h,'avatar'),'disabling through config removes mounted buddy');
+  h.context.preferences={...h.context.preferences,enabled:true,mode:'emoji'}; h.context.configChanged();
+  await new Promise(resolve=>setImmediate(resolve));
+  check(!!buddySpan(h,'emoji'),'live config switches to emoji without reloading');
+  cleanup();
+  check(!h.context.configChanged && !buddySpan(h,'emoji'),'unload unsubscribes and removes the buddy');
+}
+{
+  const h=createHarness(); let cleanup,resolve;
+  h.context.window.__dshLoader__.config.read=()=>new Promise(done=>{resolve=done});
+  const installing=h.mod.apply({effect:fn=>{cleanup=fn()},dshLoaderUi:h.uiStub});
+  cleanup(); resolve({value:h.context.preferences}); await installing;
+  check(!buddySpan(h,'avatar'),'a config read completing after unload cannot mount');
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`)

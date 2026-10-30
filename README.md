@@ -23,7 +23,7 @@ English | [简体中文](README.zh_CN.md)
 
 </div>
 
-`dsh-thought-buddy` is a pure client-side plugin for the [DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/) Web GUI. While the model is working, the status pill that reads `Deep diving...` grows a tiny Grok-style robot avatar: it blinks, swaps expressions with a springy morph, wanders its gaze, and gently bobs — all drawn live as **SVG via `requestAnimationFrame`**, with zero runtime dependencies. Every time the avatar switches expression, the status text rewrites itself with a typewriter effect (deleting character by character, then typing out the next word).
+`dsh-thought-buddy` is a Web plugin with profile-backed configuration for the [DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/) Web GUI. While the model is working, the status pill that reads `Deep diving...` grows a tiny Grok-style robot avatar: it blinks, swaps expressions with a springy morph, wanders its gaze, and gently bobs — all drawn live as **SVG via `requestAnimationFrame`**, with no additional animation library. Every time the avatar switches expression, the status text rewrites itself with a typewriter effect (deleting character by character, then typing out the next word).
 
 The avatar animation is ported from [nasawz/GrokBot](https://github.com/nasawz/GrokBot) (a pure Flutter `CustomPaint` widget) to the web: all 25 expressions × 2 eyes × 48-point eye rings, 18 body shapes, and 39 states with their expression/blink cadences are preserved.
 
@@ -51,12 +51,12 @@ Install the @dsh-plugin/dsh-thought-buddy plugin into the profile I specify (or 
 
 Steps:
 1. Add the plugin dependency: `dsh plugin --profile <PROFILE> add @dsh-plugin/dsh-thought-buddy` (or the equivalent plugin-manager command for my profile).
-2. Verify `node_modules/@dsh-plugin/dsh-thought-buddy` resolves and holds a built `lib/` directory (at least `lib/index.js` and `lib/client.js`). The runtime has no dependencies; building the TypeScript sources needs the `typescript` devDependency (`npm ci`/`npm install` once). If the artifacts are missing, run `npm run build` in the plugin directory and re-add.
+2. Verify `node_modules/@dsh-plugin/dsh-thought-buddy` resolves and holds a built `lib/` directory (at least `lib/index.js` and `lib/client.js`). Install dsh-loader 2.x alongside this plugin; building the TypeScript sources needs the `typescript` devDependency (`npm ci`/`npm install` once). If the artifacts are missing, run `npm run build` in the plugin directory and re-add.
 3. Make sure the profile manifest's `dsh.profile.bundles` includes `@dsh-plugin/dsh-thought-buddy` — the bundle patch (`cordis.patch.yml`) inserts the plugin row automatically at boot.
 4. Do not start the profile — install and verify only, then report what you changed.
 ```
 
-Then restart `dsh web`, refresh the page, and send the model a message — the buddy appears in front of `Deep diving...`. All runtime options are set via `localStorage` (see below); there is no settings page.
+Then restart `dsh web`, refresh the page, and send the model a message — the buddy appears in front of `Deep diving...`. Runtime preferences use the loader-managed configuration form and apply immediately.
 
 ### Install from a local checkout (`link:`)
 
@@ -73,66 +73,36 @@ For local development, wire the plugin into a web profile via a `link:` dependen
 3. **Restart `dsh web`** — the client-module manifest is composed at boot, so a new bundle needs a restart
 4. Refresh the page and send the model a message
 
-## Configuration (localStorage, applied on reload)
+## 2.0.0 configuration and migration
 
-| Key | Default | Description |
+Requires Node.js 24.9+ and dsh-loader 2.x. Supports the loader's explicit `0.1.5`, `0.1.6`, `0.1.7`, `0.2.0`, `0.2.1` and `0.2.2` release families, including prereleases.
+
+Loader's config-api stores preferences at `<profile>/config/dsh-thought-buddy/config.json`. Before `0.1.6-alpha.2`, open **Settings → Plugin configuration**; from that version, use the plugin detail page. The card starts collapsed. Saving immediately refreshes the animation. Reset changes the draft until saved.
+
+| Field | Default | Meaning |
 | --- | --- | --- |
-| `dsh-thought-buddy.enabled` | `1` | `0` disables the plugin |
-| `dsh-thought-buddy.mode` | `avatar` | `emoji` switches to emoji cycling |
-| `dsh-thought-buddy.size` | `18` | avatar size in px (8–64) |
-| `dsh-thought-buddy.emojis` | `🤿 🫧 🌊 🐙 🔍 🧠 💭` | space/comma-separated emoji list (emoji mode) |
+| `enabled` | `true` | Show the buddy |
+| `mode` | `avatar` | Animated `avatar` or cycling `emoji` |
+| `size` | `18` | Size, 8–64 px |
+| `emojis` | `🤿 🫧 🌊 🐙 🔍 🧠 💭` | Nonempty array of emoji strings |
 
-```js
-// console example
-localStorage.setItem('dsh-thought-buddy.mode', 'emoji')
-localStorage.setItem('dsh-thought-buddy.size', '22')
-location.reload()
-```
+1.x localStorage keys are no longer read or imported automatically. Re-enter old preferences in the form. Each profile has its own configuration; uninstalling retains the file. Unload cancels the subscription and animation, including configuration reads that complete later.
 
-## Development
-
-```
-dsh-thought-buddy/
-├── ref/GrokBot/            # reference project (git-ignored, read-only)
-├── src/
-│   ├── index.ts            # host half (no-op mount row)
-│   └── client/
-│       ├── data.ts         # generated typed data: 25 expressions × 2 eyes × 48 points, 18 shapes, 39 states
-│       └── index.ts        # client engine: SVG avatar + typewriter + observer + apply()
-├── scripts/
-│   ├── gen-data-lib.mjs    # Dart parsing + data.ts rendering helpers
-│   ├── gen-data.mjs        # regenerates data.ts from ref/GrokBot's Dart sources
-│   └── build.mjs           # assembles lib/client.js (__ModuleLoader__ contract) from tsc output
-├── test/verify.mjs         # browserless tests against the built bundle (SVG, pacing, typewriter)
-├── tsconfig.json           # host-half compile: src/index.ts → lib/ (node ESM)
-├── tsconfig.client.json    # client-half compile: src/client/*.ts → .build/client/ (plain scripts)
-├── demo/                   # local preview (node demo/server.mjs → 4173)
-└── cordis.patch.yml        # bundle patch: inserts the thought-buddy row
-```
+## Development and architecture
 
 ```sh
-npm install           # once — installs the typescript devDependency
-npm run gen           # refresh data (after upstream GrokBot data changes)
-npm run typecheck     # type-check both halves (no emit)
-npm run build         # compile TS → lib/ + .build/client/, then assemble lib/client.js
-npm run verify        # full browserless verification
-node demo/server.mjs 4173   # preview http://127.0.0.1:4173/demo/demo.html (run npm run build first)
+npm ci
+npm run gen         # regenerate when upstream GrokBot data changes
+npm run typecheck
+npm run build
+npm run verify
 ```
 
-> The client half is written as TypeScript "plain scripts" (no `import`/`export`,
-> so the types and data stay in one global scope). `tsc` compiles them to plain
-> JS in `.build/client/`, and `scripts/build.mjs` concatenates the two files into
-> the `window.__ModuleLoader__` factory — the same loader contract as before.
-> `data.ts` must be evaluated before `index.ts` (build order is fixed).
+The host entry registers a config-api template. The client reads and subscribes to preferences, mounts the SVG/typewriter with `dshLoaderUi.mount`, and cleans up on update or unload.
 
-## Architecture
+`src/config.ts` contains browser-safe defaults and types; `src/config-template.ts` is host-only. tsdown bundles client ESM into a `__ModuleLoader__.load` factory. The client declares the `dshLoaderUi` service dependency; package metadata declares the loader client module dependency.
 
-- **Host half**: provides only the cordis bundle mount row (`cordis.patch.yml` inserts `thought-buddy`), so client-modules discovers the `dsh.client` declaration and `exports["./client"]`, serving the browser half at `/plugins/@dsh-plugin/dsh-thought-buddy/client.js`.
-- **Client half**: `apply(ctx)` registers a `MutationObserver` watching `[data-conversation-scroll] [role="status"]` pills whose text contains "diving"; the avatar/typewriter mount in front of the text and live with the pill's DOM lifecycle.
-- **Animation**: a per-frame port of Flutter's `_GrokBotState._onTick` — critically-damped spring expression morphing (ω=7, 1/120 substeps), thinking-pool expression switching, 320 ms blink curve, spherical head-turn projection (`asin`/`cos` depth culling), wandering gaze; polygon coordinates are written to the SVG `points` attribute every frame.
-- **Typewriter**: a timer-driven state machine over the pill's text node. React never touches the node because the text fiber's `children` string is always `"Deep diving..."` (bail-out), exactly like the injected avatar node.
-
-> ⚠️ Two different `inject`s: the bundle's exported `exports.inject` is the **cordis service dependency** (this plugin only uses `ctx.effect`, so it must be an empty array — putting package names there makes the fiber wait forever for a service that does not exist and boot fails with `pending (waiting for service: ...)`); `package.json`'s `dsh.client.inject` is the **client module dependency declaration** (this plugin needs none, so it is omitted).
+`test/verify.mjs` checks the built bundle's SVG, animation cadence, typewriter, live configuration changes and unload during an asynchronous read. The original geometry and animation engine are retained.
 
 ## Links
 

@@ -19,38 +19,7 @@ import type { TbExpression, TbEyeRing, TbPoint, TbShape } from './data.js';
 
 /* ======================= 配置（localStorage，可静默降级） ======================= */
 
-const TB_NS = 'dsh-thought-buddy';
-
-interface TbConfig {
-  enabled: boolean;
-  /** 'avatar' | 'emoji' */
-  mode: 'avatar' | 'emoji';
-  size: number;
-  emojis: string[];
-}
-
-function tbRead(key: string, fallback: string): string {
-  try {
-    const raw = localStorage.getItem(`${TB_NS}.${key}`);
-    return raw === null || raw === '' ? fallback : raw;
-  } catch {
-    return fallback;
-  }
-}
-
-function tbConfig(): TbConfig {
-  const size = Number.parseInt(tbRead('size', '18'), 10);
-  return {
-    enabled: tbRead('enabled', '1') !== '0',
-    mode: tbRead('mode', 'avatar') === 'emoji' ? 'emoji' : 'avatar',
-    size: Number.isFinite(size) && size >= 8 && size <= 64 ? size : 18,
-    emojis: tbRead('emojis', '🤿 🫧 🌊 🐙 🔍 🧠 💭')
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean),
-  };
-}
-
+import { defaults, type BuddyConfig as TbConfig } from '../config.js';
 /* ============================= 注入的样式 ============================= */
 
 function tbInjectStyles(): void {
@@ -649,8 +618,7 @@ interface TbUiApi {
  * 本插件只保留两件真正属于自己的判断：状态条文案是否是「Deep diving…」这类，
  * 以及渲染哪种表情。返回值是 loader 给的 disposer。
  */
-function tbStart(ui: TbUiApi): () => void {
-  const cfg = tbConfig();
+function tbStart(ui: TbUiApi, cfg: TbConfig): () => void {
   if (!cfg.enabled) return () => {};
   tbInjectStyles();
 
@@ -689,8 +657,23 @@ interface TbClientContext {
 
 export { inject };
 
-export function apply(ctx: TbClientContext) {
+export async function apply(ctx: TbClientContext) {
   const ui = ctx.dshLoaderUi ?? (ctx.get?.('dshLoaderUi') as TbUiApi | undefined);
-  if (ui === undefined) return;
-  ctx.effect(() => tbStart(ui));
+  if (!ui) return;
+  const client = (window as unknown as { __dshLoader__: { config: {
+    read(id: string): Promise<{ value: TbConfig }>;
+    subscribe(listener: () => void): () => void;
+  } } }).__dshLoader__.config;
+  let disposed = false, revision = 0, stop = () => {};
+  const refresh = async () => {
+    const generation = ++revision;
+    const view = await client.read('dsh-thought-buddy');
+    if (disposed || generation !== revision) return;
+    stop(); stop = tbStart(ui, { ...defaults, ...view.value });
+  };
+  ctx.effect(() => {
+    const off = client.subscribe(() => { void refresh().catch(error => console.error('[thought-buddy] config refresh failed', error)); });
+    return () => { disposed = true; off(); stop(); };
+  });
+  await refresh();
 }

@@ -1,7 +1,7 @@
 {
   "name": "@dsh-plugin/dsh-thought-buddy",
-  "version": "0.3.3",
-  "description": "DSH web 鎻掍欢锛氬湪銆孌eep diving...銆嶇姸鎬佸墠鎻掑叆涓€涓姩鎬佸皬琛ㄦ儏 鈥斺€?GrokBot 椋庢牸鍔ㄧ敾澶村儚锛堢函 SVG + rAF锛岀Щ妞嶈嚜 nasawz/GrokBot锛屾棤浠讳綍杩愯鏃朵緷璧栵級锛屼篃鍙垏鎹负 emoji 杞挱妯″紡",
+  "version": "2.0.0",
+  "description": "Animated thinking avatar and emoji companion for the DSH Web UI, with profile-backed configuration.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -30,7 +30,7 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24.9.0"
   },
   "repository": {
     "type": "git",
@@ -46,7 +46,6 @@
     },
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-client-runtime",
         "@dsh-plugin/dsh-loader"
       ],
       "platform": "web"
@@ -62,10 +61,11 @@
     "emoji"
   ],
   "peerDependencies": {
-    "@dsh-plugin/dsh-loader": "^1.3.0"
+    "@dsh-plugin/dsh-loader": "^2.0.0-0"
   },
   "devDependencies": {
     "tsdown": "^0.22.14",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "@dsh-plugin/dsh-loader": "2.0.0-dev.41037890182"
   }
 }
