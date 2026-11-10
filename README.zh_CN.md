@@ -50,7 +50,7 @@
 
 步骤：
 1. 添加插件依赖：`dsh plugin --profile <PROFILE> add @dsh-plugin/dsh-thought-buddy`（或我 profile 对应的插件管理命令）。
-2. 验证 `node_modules/@dsh-plugin/dsh-thought-buddy` 能解析且包含构建好的 `lib/` 目录（至少 `lib/index.js` 与 `lib/client.js`）。需要 dsh-loader 2.x；构建 TypeScript 源码需要 `typescript` devDependency（先 `npm ci` / `npm install` 一次）。若产物缺失，在插件目录运行 `npm run build` 后重新添加。
+2. 验证 `node_modules/@dsh-plugin/dsh-thought-buddy` 能解析且包含构建好的 `lib/` 目录（至少 `lib/index.js` 与 `lib/client.js`）。需要 dsh-loader `^2.0.0-dev.42783642741`；构建 TypeScript 源码需要 `typescript` devDependency（先 `npm ci` / `npm install` 一次）。若产物缺失，在插件目录运行 `npm run build` 后重新添加。
 3. 确认 profile 清单的 `dsh.profile.bundles` 包含 `@dsh-plugin/dsh-thought-buddy` —— bundle patch（`cordis.patch.yml`）会在启动时自动插入插件行。
 4. 不要启动 profile —— 只安装与验证，然后汇报你改了什么。
 ```
@@ -74,7 +74,7 @@
 
 ## 2.0.0 配置与迁移
 
-需要 Node.js 24.9+ 和 dsh-loader 2.x。兼容 loader 明确支持的 `0.1.5`、`0.1.6`、`0.1.7`、`0.2.0`、`0.2.1`、`0.2.2` 系列及其预发布版。
+需要 Node.js 24.9+ 和 dsh-loader `^2.0.0-dev.42783642741`。兼容 loader 明确支持的 `0.1.5`、`0.1.6`、`0.1.7`、`0.2.0`、`0.2.1`、`0.2.2` 系列及其预发布版。
 
 配置由 loader 的 config-api 管理，保存到 `<profile>/config/dsh-thought-buddy/config.json`。在 `0.1.6-alpha.2` 之前打开「设置 → 插件配置」，之后在插件详情页配置。卡片默认折叠；保存后立即更新动画，无需刷新。恢复默认值只改草稿，保存后生效。
 

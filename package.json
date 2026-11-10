@@ -61,11 +61,11 @@
     "emoji"
   ],
   "peerDependencies": {
-    "@dsh-plugin/dsh-loader": "^2.0.0-0"
+    "@dsh-plugin/dsh-loader": "^2.0.0-dev.42783642741"
   },
   "devDependencies": {
     "tsdown": "^0.22.14",
     "typescript": "^7.0.2",
-    "@dsh-plugin/dsh-loader": "2.0.0-dev.41037890182"
+    "@dsh-plugin/dsh-loader": "2.0.0-dev.42783642741"
   }
 }

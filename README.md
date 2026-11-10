@@ -51,7 +51,7 @@ Install the @dsh-plugin/dsh-thought-buddy plugin into the profile I specify (or 
 
 Steps:
 1. Add the plugin dependency: `dsh plugin --profile <PROFILE> add @dsh-plugin/dsh-thought-buddy` (or the equivalent plugin-manager command for my profile).
-2. Verify `node_modules/@dsh-plugin/dsh-thought-buddy` resolves and holds a built `lib/` directory (at least `lib/index.js` and `lib/client.js`). Install dsh-loader 2.x alongside this plugin; building the TypeScript sources needs the `typescript` devDependency (`npm ci`/`npm install` once). If the artifacts are missing, run `npm run build` in the plugin directory and re-add.
+2. Verify `node_modules/@dsh-plugin/dsh-thought-buddy` resolves and holds a built `lib/` directory (at least `lib/index.js` and `lib/client.js`). Install dsh-loader `^2.0.0-dev.42783642741` alongside this plugin; building the TypeScript sources needs the `typescript` devDependency (`npm ci`/`npm install` once). If the artifacts are missing, run `npm run build` in the plugin directory and re-add.
 3. Make sure the profile manifest's `dsh.profile.bundles` includes `@dsh-plugin/dsh-thought-buddy` — the bundle patch (`cordis.patch.yml`) inserts the plugin row automatically at boot.
 4. Do not start the profile — install and verify only, then report what you changed.
 ```
@@ -75,7 +75,7 @@ For local development, wire the plugin into a web profile via a `link:` dependen
 
 ## 2.0.0 configuration and migration
 
-Requires Node.js 24.9+ and dsh-loader 2.x. Supports the loader's explicit `0.1.5`, `0.1.6`, `0.1.7`, `0.2.0`, `0.2.1` and `0.2.2` release families, including prereleases.
+Requires Node.js 24.9+ and dsh-loader `^2.0.0-dev.42783642741`. Supports the loader's explicit `0.1.5`, `0.1.6`, `0.1.7`, `0.2.0`, `0.2.1` and `0.2.2` release families, including prereleases.
 
 Loader's config-api stores preferences at `<profile>/config/dsh-thought-buddy/config.json`. Before `0.1.6-alpha.2`, open **Settings → Plugin configuration**; from that version, use the plugin detail page. The card starts collapsed. Saving immediately refreshes the animation. Reset changes the draft until saved.
 
