@@ -41,7 +41,7 @@ function tbInjectStyles(): () => void {
   white-space: nowrap;
 }
 [data-thought-buddy-row] .tb-elapsed,
-[role="status"]:has(> [data-thought-buddy-row="legacy"]) > [class*="_turnStatusClock"] {
+[role="status"]:has(> [data-thought-buddy-row="legacy"][data-tb-replace-text]) > [class*="_turnStatusClock"] {
   color: var(--dsw-alias-label-tertiary, #777);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -53,14 +53,21 @@ function tbInjectStyles(): () => void {
   block-size: auto;
 }
 [data-chat-running] [class*="_runningContent"]:has(> [data-thought-buddy-row="running"])
-  > :is([class*="_runningIcon"], [class*="_runningText"]) {
+  > [class*="_runningIcon"] {
+  order: -1;
+}
+[data-chat-running] [class*="_runningContent"]:has(> [data-tb-animation]) > [class*="_runningIcon"],
+[data-chat-running] [class*="_runningContent"]:has(> [data-tb-replace-text]) > [class*="_runningText"] {
   display: none;
 }
 [data-thought-buddy] {
   display: inline-flex;
   align-items: center;
   flex: none;
-  margin-right: 7px;
+}
+[data-tb-replace-text] > [data-thought-buddy],
+[data-thought-buddy-row="legacy"] > [data-thought-buddy] {
+  margin-inline-end: 7px;
 }
 [data-thought-buddy="avatar"] { animation: tb-bob 1.7s ease-in-out infinite; }
 [data-thought-buddy="avatar"] svg { display: block; }
@@ -204,21 +211,14 @@ const TB_WORDS: string[] = [
   'Synthesizing', 'Thinking', 'Transmuting', 'Vibing', 'Working',
 ];
 
-function tbTypewriter(label: Text) {
+function tbCycleWords(label: Text, typewriter: boolean, standalone: boolean) {
   const DELETE_MS = 40;
   const TYPE_MS = 46;
   const HOLD_MS = 420;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let wordIndex = -1;
-
-  const pickNext = (): string => {
-    let next = Math.floor(Math.random() * (TB_WORDS.length - Number(wordIndex >= 0)));
-    if (wordIndex >= 0 && next >= wordIndex) {
-      next += 1;
-    }
-    wordIndex = next;
-    return TB_WORDS[next];
-  };
+  const cadence = TB_STATES.thinking;
+  let wordIndex = TB_WORDS.indexOf('Thinking');
+  label.data = TB_WORDS[wordIndex] + '...';
 
   const stop = (): void => {
     if (timer !== undefined) {
@@ -238,7 +238,17 @@ function tbTypewriter(label: Text) {
 
   const switchWord = (): void => {
     stop();
-    const word = pickNext();
+    const next = Math.floor(Math.random() * (TB_WORDS.length - 1));
+    wordIndex = next >= wordIndex ? next + 1 : next;
+    const word = TB_WORDS[wordIndex];
+    const finish = (): void => {
+      label.data = word + '...';
+      queueNextWord();
+    };
+    if (!typewriter) {
+      finish();
+      return;
+    }
     let typed = 0;
     const type = (): void => {
       typed += 1;
@@ -246,7 +256,7 @@ function tbTypewriter(label: Text) {
         label.data = word.slice(0, typed);
         schedule(type, TYPE_MS);
       } else {
-        label.data = word + '...';
+        finish();
       }
     };
     const erase = (): void => {
@@ -261,6 +271,12 @@ function tbTypewriter(label: Text) {
     schedule(erase, DELETE_MS);
   };
 
+  const queueNextWord = (): void => {
+    if (standalone) {
+      schedule(switchWord, tbRandInt(cadence.expressionMin, cadence.expressionMax));
+    }
+  };
+  queueNextWord();
   return {
     switchWord,
     stop,
@@ -531,7 +547,7 @@ function tbRunAvatar(
   return { stop };
 }
 
-function tbMountAvatar(mount: Element, cfg: TbConfig, onExpression: () => void): TbHandle {
+function tbMountAvatar(mount: Element, cfg: TbConfig, onExpression?: () => void): TbHandle {
   const dark =
     typeof matchMedia === 'function' &&
     matchMedia('(prefers-color-scheme: dark)').matches;
@@ -603,32 +619,38 @@ function tbLegacyLabel(host: Element): Text | undefined {
   );
 }
 
-function tbMountBuddy(mount: HTMLElement, cfg: TbConfig, initial: string, kind: 'running' | 'legacy'): () => void {
-  const word = document.createElement('span');
-  word.className = 'tb-word';
-  const wordText = document.createTextNode(initial);
-  word.appendChild(wordText);
-  if (kind === 'running') {
-    word.setAttribute('aria-hidden', 'true');
+function tbMountBuddy(mount: HTMLElement, cfg: TbConfig, kind: 'running' | 'legacy'): () => void {
+  mount.setAttribute('data-thought-buddy-row', kind);
+  const animateAvatar = cfg.enabled && cfg.mode === 'avatar';
+  const wordText = cfg.replaceText ? document.createTextNode('') : undefined;
+  const words = wordText && tbCycleWords(wordText, cfg.typewriter, !animateAvatar);
+  let animation: TbHandle | undefined;
+  if (cfg.enabled) {
+    mount.setAttribute('data-tb-animation', '');
+    animation = animateAvatar ? tbMountAvatar(mount, cfg, words?.switchWord) : tbMountEmoji(mount, cfg);
   }
 
-  const typewriter = cfg.mode === 'avatar' ? tbTypewriter(wordText) : undefined;
-  const animation = typewriter
-    ? tbMountAvatar(mount, cfg, typewriter.switchWord)
-    : tbMountEmoji(mount, cfg);
-  mount.appendChild(word);
-  mount.setAttribute('data-thought-buddy-row', kind);
+  if (wordText) {
+    mount.setAttribute('data-tb-replace-text', '');
+    const word = document.createElement('span');
+    word.className = 'tb-word';
+    if (kind === 'running') {
+      word.setAttribute('aria-hidden', 'true');
+    }
+    word.appendChild(wordText);
+    mount.appendChild(word);
+  }
   return () => {
-    animation.stop();
-    typewriter?.stop();
+    animation?.stop();
+    words?.stop();
   };
 }
 
 function tbMountRunning(mount: HTMLElement, host: Element, cfg: TbConfig): () => void {
-  // 屏幕阅读器专用文案提供当前语言的状态词，宿主可见文案提供实时用时。
-  const announcement = host.parentElement?.querySelector(':scope > [role="status"]')?.textContent;
-  const initial = (announcement?.trim() || 'Deep diving').replace(/[.…·]+$/, '');
-  const stop = tbMountBuddy(mount, cfg, initial + '...', 'running');
+  const stop = tbMountBuddy(mount, cfg, 'running');
+  if (!cfg.replaceText) {
+    return stop;
+  }
   const elapsed = document.createElement('span');
   elapsed.className = 'tb-elapsed';
   const elapsedText = document.createTextNode('');
@@ -663,7 +685,7 @@ function tbMountRunning(mount: HTMLElement, host: Element, cfg: TbConfig): () =>
 }
 
 function tbStart(ui: TbUiApi, cfg: TbConfig): () => void {
-  if (!cfg.enabled) {
+  if (!cfg.enabled && !cfg.replaceText) {
     return () => {};
   }
   const removeStyles = tbInjectStyles();
@@ -686,8 +708,11 @@ function tbStart(ui: TbUiApi, cfg: TbConfig): () => void {
       if (!label) {
         return;
       }
+      const stop = tbMountBuddy(mount, cfg, 'legacy');
+      if (!cfg.replaceText) {
+        return stop;
+      }
       let original = label.data;
-      const stop = tbMountBuddy(mount, cfg, original, 'legacy');
       label.data = '';
       const observer = new MutationObserver(() => {
         if (label.data) {
@@ -746,7 +771,9 @@ export async function apply(ctx: TbClientContext) {
     const generation = ++revision;
     const view = await client.read('dsh-thought-buddy');
     if (disposed || generation !== revision) return;
-    stop(); stop = tbStart(ui, { ...defaults, ...view.value });
+    const { value } = view;
+    const replaceText = value.replaceText ?? value.enabled ?? defaults.replaceText;
+    stop(); stop = tbStart(ui, { ...defaults, ...value, replaceText });
   };
   ctx.effect(() => {
     const off = client.subscribe(() => { void refresh().catch(error => console.error('[thought-buddy] config refresh failed', error)); });

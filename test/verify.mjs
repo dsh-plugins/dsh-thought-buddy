@@ -400,7 +400,7 @@ function check(ok, label) {
   const word = buddyText(h, 'tb-word')
   const elapsed = buddyText(h, 'tb-elapsed')
   check(!!buddySpan(h, 'avatar') && h.announcement.children.length === 1, 'avatar mounts in visible running content only')
-  check(word?.textContent === '深度求索中...' && elapsed?.textContent === '用时 31分2秒', 'status and elapsed time render separately')
+  check(word?.textContent === 'Thinking...' && elapsed?.textContent === '用时 31分2秒', 'status is replaced immediately and elapsed time renders separately')
 
   const switchExpression = () => {
     clock += 4000
@@ -408,11 +408,11 @@ function check(ok, label) {
   }
   switchExpression()
   fireNextTimeout(h)
-  check(word?.textContent === '深度求索中..', 'expression switch erases one character at a time')
+  check(word?.textContent === 'Thinking..', 'expression switch erases one character at a time')
 
   h.label.textContent = '深度求索中，用时 31分3秒 ···'
   h.observers.get(h.label)?.()
-  check(elapsed?.textContent === '用时 31分3秒' && word?.textContent === '深度求索中..', 'host ticks update elapsed time during erasing')
+  check(elapsed?.textContent === '用时 31分3秒' && word?.textContent === 'Thinking..', 'host ticks update elapsed time during erasing')
 
   for (let step = 0; step < 20 && word?.textContent; step++) fireNextTimeout(h)
   const [pause] = h.timers.keys()
@@ -438,6 +438,39 @@ function check(ok, label) {
   check(word?.textContent === '' && h.timers.size === 1, 'pause is pending before disposal')
   cleanup()
   check(h.timers.size === 0 && h.observers.size === 0 && !buddySpan(h, 'avatar'), 'unload cancels the pause and elapsed observation')
+}
+
+/* ================= independent switches ================= */
+{
+  const h = createHarness({ running: true })
+  h.context.preferences = { ...h.context.preferences, enabled: true, replaceText: false, typewriter: true }
+  let cleanup
+  await h.mod.apply({ effect: fn => { cleanup = fn() }, dshLoaderUi: h.uiStub })
+  check(!!buddySpan(h, 'avatar') && !buddyText(h, 'tb-word') && !buddyText(h, 'tb-elapsed'), 'avatar-only keeps the native label and clock')
+  check(h.observers.size === 0 && h.timers.size === 0, 'disabled replacement ignores the stored typewriter preference')
+
+  const refresh = async preferences => {
+    Object.assign(h.context.preferences, preferences)
+    h.context.configChanged()
+    await new Promise(resolve => setImmediate(resolve))
+  }
+  await refresh({ enabled: false, replaceText: true, typewriter: false })
+  const word = buddyText(h, 'tb-word')
+  const before = word?.textContent
+  check(!buddySpan(h, 'avatar') && !!buddyText(h, 'tb-elapsed'), 'replacement runs independently of the avatar')
+  fireNextTimeout(h)
+  check(word?.textContent !== before && /^[A-Za-z]+\.\.\.$/.test(word?.textContent ?? ''), 'disabled typewriter swaps the complete word at once')
+
+  await refresh({ typewriter: true })
+  const animated = buddyText(h, 'tb-word')
+  fireNextTimeout(h)
+  fireNextTimeout(h)
+  check(animated?.textContent === 'Thinking..', 'typewriter also works with the native whale')
+
+  await refresh({ replaceText: false, typewriter: false })
+  check(h.fakeRoot.children.length === 1 && h.fakeRoot.children[0] === h.label, 'all switches off leave the native status untouched')
+  check(h.timers.size === 0 && h.observers.size === 0 && h.context.document.head.children.length === 0, 'turning everything off removes timers, observers and styles')
+  cleanup()
 }
 
 /* ================= live config + late completion ================= */
