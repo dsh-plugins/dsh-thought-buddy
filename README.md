@@ -34,7 +34,7 @@ The avatar animation is ported from [nasawz/GrokBot](https://github.com/nasawz/G
 | Feature | Description |
 | --- | --- |
 | GrokBot avatar | thinking-state expression pool `[8,16,14,17,5]` cycles automatically; springy morph between expressions; 320 ms blinks (random 3.5–7 s interval); spherical head-turn projection + wandering gaze; gentle 1.7 s breathing bob |
-| Expression-synced typewriter | on every expression switch, the status text leaves `Deep diving...` via a typewriter effect (delete character by character, pause, then type out the next word) cycling through 55 candidates (`Accomplishing`…`Working`), e.g. `Reticulating...`; React re-renders never overwrite it (the text fiber's children string never changes, so React bails out) |
+| Expression-synced typewriter | on every expression switch, the status text leaves `Deep diving...` via a typewriter effect (delete character by character, pause, then type out the next word) cycling through 55 candidates (`Accomplishing`…`Working`), e.g. `Reticulating...` |
 | Emoji mode | fallback mode that cycles an emoji list (default `🤿 🫧 🌊 🐙 🔍 🧠 💭`) with a pop-in on every switch |
 | Theme aware | follows `prefers-color-scheme`: light `#5b7fe5/#fffdf7`, dark `#6689ea/#181a15` (matching the DSH theme) |
 | Reduced motion | under `prefers-reduced-motion: reduce`, the bob and head-turn sway are disabled; expression changes and blinks remain |

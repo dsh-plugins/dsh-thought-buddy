@@ -39,7 +39,7 @@ class FakeNode {
     this.style = {}
     this.parentNode = null
     this._detached = false
-    this.textContent = ''
+    this._textContent = ''
     this.dataset = {}
   }
   /**
@@ -54,6 +54,13 @@ class FakeNode {
     return this.parentNode ? this.parentNode.isConnected : true
   }
   set isConnected(value) { this._detached = !value }
+  get textContent() { return this._textContent + this.childNodes.map((node) => node.textContent).join('') }
+  set textContent(value) { this._textContent = value }
+  get parentElement() { return this.parentNode }
+  closest(selector) {
+    if (selector === '[data-chat-running]' && this.attrs['data-chat-running']) return this
+    return this.parentNode?.closest(selector) ?? null
+  }
   setAttribute(k, v) { this.attrs[k] = String(v) }
   getAttribute(k) { return this.attrs[k] }
   removeAttribute(k) { delete this.attrs[k] }
@@ -66,20 +73,56 @@ class FakeNode {
     this.childNodes = [c, ...this.childNodes.filter((n) => n !== c)]
     return c
   }
-  querySelector() { return null }
+  remove() {
+    const parent = this.parentNode
+    if (!parent) return
+    parent.children = parent.children.filter((c) => c !== this)
+    parent.childNodes = parent.childNodes.filter((c) => c !== this)
+    this.parentNode = null
+    this.isConnected = false
+  }
+  querySelector(selector) {
+    if (selector === ':scope > [class*="_runningText"]') {
+      return this.children.find((c) => c.className?.endsWith('_runningText')) ?? null
+    }
+    if (selector === ':scope > [role="status"]') {
+      return this.children.find((c) => c.attrs.role === 'status') ?? null
+    }
+    return null
+  }
 }
 
-function createHarness({ now = () => Date.now() } = {}) {
+class FakeText {
+  nodeType = 3
+  constructor(data) { this.data = data }
+  get isConnected() { return this.parentNode?.isConnected ?? false }
+  get textContent() { return this.data }
+}
+
+function createHarness({ now = () => Date.now(), running = false } = {}) {
   const rafQueue = []
   let rafId = 0
   // 可控定时器：setInterval/setTimeout 收集到这里，测试手动执行
   const timers = new Map()
   let timerSeq = 0
   const fakeRoot = new FakeNode('div')
-  fakeRoot.textContent = 'Deep diving...'
-  // 模拟 React 渲染的文本节点（打字机遍历 childNodes 找 nodeType === 3）
-  const textNode = { nodeType: 3, textContent: 'Deep diving...' }
-  fakeRoot.childNodes.push(textNode)
+  const textNode = new FakeText('Deep diving...')
+  const announcement = new FakeNode('span')
+  const label = new FakeNode('span')
+  const observers = new Map()
+  if (running) {
+    const row = new FakeNode('div')
+    row.setAttribute('data-chat-running', 'true')
+    announcement.setAttribute('role', 'status')
+    announcement.appendChild(new FakeText('深度求索中'))
+    row.appendChild(announcement)
+    row.appendChild(fakeRoot)
+    label.className = 'host_runningText'
+    label.textContent = '深度求索中，用时 31分2秒 ···'
+    fakeRoot.appendChild(label)
+  } else {
+    fakeRoot.appendChild(textNode)
+  }
 
   const context = {
     console,
@@ -91,10 +134,11 @@ function createHarness({ now = () => Date.now() } = {}) {
     document: {
       createElementNS: (ns, tag) => new FakeNode(tag, ns),
       createElement: (tag) => new FakeNode(tag),
+      createTextNode: (data) => new FakeText(data),
       head: new FakeNode('head'),
       documentElement: new FakeNode('html'),
       querySelector: () => null,
-      querySelectorAll: (sel) => (sel.includes('status') ? [fakeRoot] : []),
+      querySelectorAll: (sel) => (running && sel.includes('_runningContent') ? [fakeRoot] : []),
     },
     localStorage: { getItem: () => null },
     matchMedia: () => ({ matches: false }),
@@ -106,9 +150,13 @@ function createHarness({ now = () => Date.now() } = {}) {
     setTimeout: (fn, ms) => { const id = ++timerSeq; timers.set(id, { fn, ms, kind: 'timeout' }); return id },
     clearTimeout: (id) => { timers.delete(id) },
     MutationObserver: class {
-      constructor() {}
-      observe() {}
-      disconnect() {}
+      nodes = new Set()
+      constructor(callback) { this.callback = callback }
+      observe(node) { this.nodes.add(node); observers.set(node, this.callback) }
+      disconnect() {
+        for (const node of this.nodes) observers.delete(node)
+        this.nodes.clear()
+      }
     },
     Date,
     Math,
@@ -134,9 +182,17 @@ function createHarness({ now = () => Date.now() } = {}) {
    * 观察器、rAF 合流与自愈补回属于 loader 的职责，由 dsh-loader 自己的 jsdom
    * 测试覆盖，不在本产物校验范围内。
    */
+  const anchors = new Map([
+    ['conversation.status', { find: () => [running ? announcement : fakeRoot] }],
+  ])
+  const mounted = new Map()
   const uiStub = {
+    defineAnchor(name, spec) {
+      anchors.set(name, spec)
+      return () => { mounted.get(name)?.(); anchors.delete(name) }
+    },
     mount(anchor, spec) {
-      const hosts = context.document.querySelectorAll(`[${anchor}] [role="status"]`)
+      const hosts = anchors.get(anchor).find()
       const cleanups = []
       for (const host of hosts) {
         if (typeof spec.when === 'function' && !spec.when(host)) continue
@@ -146,14 +202,15 @@ function createHarness({ now = () => Date.now() } = {}) {
         const cleanup = spec.render(mount, host)
         cleanups.push(() => {
           if (typeof cleanup === 'function') cleanup()
-          if (mount.parentNode) {
-            mount.parentNode.children = mount.parentNode.children.filter((c) => c !== mount)
-          }
+          mount.remove()
         })
       }
-      return () => {
+      const stop = () => {
         for (const c of cleanups) c()
+        mounted.delete(anchor)
       }
+      mounted.set(anchor, stop)
+      return stop
     },
   }
 
@@ -161,7 +218,7 @@ function createHarness({ now = () => Date.now() } = {}) {
   if (context.declaration === undefined) throw new Error('bundle did not register via __ModuleLoader__.load')
   // 客户端无任何 external 运行时依赖；require 桩被调用即为错误。
   const mod = context.declaration.factory((id) => { throw new Error(`unexpected require: ${id}`) })
-  return { mod, fakeRoot, textNode, rafQueue, timers, context, uiStub }
+  return { mod, fakeRoot, textNode, announcement, label, observers, rafQueue, timers, context, uiStub }
 }
 
 /**
@@ -179,25 +236,18 @@ function buddySpan(harness, kind) {
   return undefined
 }
 
-/** 执行当前所有 interval 回调（打字机删除/输入用），直到没有 interval 或达到 guard 上限。 */
-function fireIntervals(harness, guard = 300) {
-  let runs = 0
-  while (runs++ < guard) {
-    const intervals = [...harness.timers.values()].filter((t) => t.kind === 'interval')
-    if (intervals.length === 0) return runs
-    for (const t of intervals) t.fn()
-  }
-  return runs
+function buddyText(harness, className) {
+  const slot = harness.fakeRoot.children.find((c) => c.attrs?.['data-thought-buddy-row'])
+  return slot?.children.find((c) => c.className === className)
 }
 
-/** 执行并移除当前所有 timeout 回调（打字机停顿用）。 */
-function fireTimeouts(harness) {
-  for (const [id, t] of [...harness.timers]) {
-    if (t.kind === 'timeout') {
-      harness.timers.delete(id)
-      t.fn()
-    }
-  }
+function fireNextTimeout(harness) {
+  const next = [...harness.timers].find(([, timer]) => timer.kind === 'timeout')
+  if (!next) return false
+  const [id, timer] = next
+  harness.timers.delete(id)
+  timer.fn()
+  return true
 }
 
 function eyePolygons(harness) {
@@ -344,61 +394,50 @@ function check(ok, label) {
 /* ================= 6) 打字机文字 + 表情同步 ================= */
 {
   let clock = 1000
-  const h = createHarness({ now: () => clock })
-  await h.mod.apply({ effect: (fn) => fn(), dshLoaderUi: h.uiStub })
+  const h = createHarness({ now: () => clock, running: true })
+  let cleanup
+  await h.mod.apply({ effect: (fn) => { cleanup = fn() }, dshLoaderUi: h.uiStub })
+  const word = buddyText(h, 'tb-word')
+  const elapsed = buddyText(h, 'tb-elapsed')
+  check(!!buddySpan(h, 'avatar') && h.announcement.children.length === 1, 'avatar mounts in visible running content only')
+  check(word?.textContent === '深度求索中...' && elapsed?.textContent === '用时 31分2秒', 'status and elapsed time render separately')
 
-  // 初始文字 = React 渲染的 "Deep diving..."
-  check(h.textNode.textContent === 'Deep diving...', `initial status text = "${h.textNode.textContent}"`)
-
-  // 推进 rAF 直到第一次表情切换（exprAt = mount + 2000~3600ms）——
-  // 表情切换的 tick 会通过 onExpression 创建打字机删除定时器
-  const STEP = 16.7
-  const maxTicks = 600
-  let armed = false
-  for (let i = 0; i < maxTicks && !armed; i++) {
-    const ts = 1000 + i * STEP
-    clock = ts
-    const cb = h.rafQueue.shift()
-    if (cb) cb(ts)
-    armed = [...h.timers.values()].some((t) => t.kind === 'interval')
+  const switchExpression = () => {
+    clock += 4000
+    h.rafQueue.shift()?.(clock)
   }
-  check(armed, 'first expression switch triggers typewriter (delete interval armed)')
-  // 跑一次删除定时器，确认逐字符删除
-  const del = [...h.timers.values()].find((t) => t.kind === 'interval')
-  if (del) del.fn()
-  check(h.textNode.textContent.length < 'Deep diving...'.length, `deleting phase active ("${h.textNode.textContent}")`)
+  switchExpression()
+  fireNextTimeout(h)
+  check(word?.textContent === '深度求索中..', 'expression switch erases one character at a time')
 
-  // 删除到空 → 停顿 timeout → 逐字输入新词
-  fireIntervals(h)
-  fireTimeouts(h)
-  fireIntervals(h)
-  const finalText = h.textNode.textContent
-  const wordMatch = /^[A-Za-z]+\.\.\.$/.exec(finalText)
-  check(
-    !!wordMatch && finalText !== 'Deep diving...' && wordMatch[0].length > 6,
-    `typewriter produced "${finalText}" (a word from the list + "...")`,
-  )
+  h.label.textContent = '深度求索中，用时 31分3秒 ···'
+  h.observers.get(h.label)?.()
+  check(elapsed?.textContent === '用时 31分3秒' && word?.textContent === '深度求索中..', 'host ticks update elapsed time during erasing')
 
-  // 推进到第二次表情切换 → 再次武装删除定时器
-  const before2 = h.textNode.textContent
-  let switched2 = false
-  for (let i = 0; i < maxTicks && !switched2; i++) {
-    const ts = 1000 + (maxTicks + i) * STEP
-    clock = ts
-    const cb = h.rafQueue.shift()
-    if (cb) cb(ts)
-    switched2 = [...h.timers.values()].some((t) => t.kind === 'interval') || h.textNode.textContent !== before2
-  }
-  check(switched2, 'second expression switch retriggers typewriter')
+  for (let step = 0; step < 20 && word?.textContent; step++) fireNextTimeout(h)
+  const [pause] = h.timers.keys()
+  switchExpression()
+  check(h.timers.size === 1 && !h.timers.has(pause), 'new expression cancels the previous pause timer')
+  for (let step = 0; step < 50 && h.timers.size; step++) fireNextTimeout(h)
+  check(/^[A-Za-z]+\.\.\.$/.test(word?.textContent ?? ''), 'typewriter finishes the next word')
+  check(h.label.textContent === '深度求索中，用时 31分3秒 ···', 'typewriter preserves the React-owned status')
 
-  // 完整跑完第二轮，确认又产出新词
-  fireIntervals(h)
-  fireTimeouts(h)
-  fireIntervals(h)
-  check(
-    /^[A-Za-z]+\.\.\.$/.test(h.textNode.textContent),
-    `second cycle produced "${h.textNode.textContent}"`,
-  )
+  const replacement = new FakeNode('span')
+  replacement.className = h.label.className
+  replacement.textContent = 'Deep diving for 1h 2m 3s ···'
+  h.label.remove()
+  h.fakeRoot.appendChild(replacement)
+  h.observers.get(h.fakeRoot)?.()
+  check(elapsed?.textContent === 'for 1h 2m 3s' && !h.observers.has(h.label), 'elapsed time follows the replacement host label')
+  replacement.textContent = 'Deep diving for 1h 2m 4s ···'
+  h.observers.get(replacement)?.()
+  check(elapsed?.textContent === 'for 1h 2m 4s', 'replacement label ticks continue updating elapsed time')
+
+  switchExpression()
+  for (let step = 0; step < 20 && word?.textContent; step++) fireNextTimeout(h)
+  check(word?.textContent === '' && h.timers.size === 1, 'pause is pending before disposal')
+  cleanup()
+  check(h.timers.size === 0 && h.observers.size === 0 && !buddySpan(h, 'avatar'), 'unload cancels the pause and elapsed observation')
 }
 
 /* ================= live config + late completion ================= */
@@ -408,6 +447,7 @@ function check(ok, label) {
   h.context.preferences={...h.context.preferences,enabled:false}; h.context.configChanged();
   await new Promise(resolve=>setImmediate(resolve));
   check(!buddySpan(h,'avatar'),'disabling through config removes mounted buddy');
+  check(h.textNode.textContent === 'Deep diving...', 'disabling restores the legacy status text')
   h.context.preferences={...h.context.preferences,enabled:true,mode:'emoji'}; h.context.configChanged();
   await new Promise(resolve=>setImmediate(resolve));
   check(!!buddySpan(h,'emoji'),'live config switches to emoji without reloading');

@@ -17,19 +17,45 @@ import type { TbExpression, TbEyeRing, TbPoint, TbShape } from './data.js';
 
 'use strict';
 
-/* ======================= 配置（localStorage，可静默降级） ======================= */
-
 import { defaults, type BuddyConfig as TbConfig } from '../config.js';
 /* ============================= 注入的样式 ============================= */
 
-function tbInjectStyles(): void {
+function tbInjectStyles(): () => void {
   const pluginId = '@dsh-plugin/dsh-thought-buddy';
   const tagId = `${pluginId}/styles.css`;
-  if (document.querySelector(`style[data-plugin-css="${tagId}"]`) !== null) return;
   const style = document.createElement('style');
   style.dataset.plugin = pluginId;
   style.dataset.pluginCss = tagId;
   style.textContent = `
+[data-thought-buddy-row] {
+  display: inline-flex;
+  align-items: center;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+[data-thought-buddy-row] .tb-word {
+  inline-size: 10em;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-thought-buddy-row] .tb-elapsed,
+[role="status"]:has(> [data-thought-buddy-row="legacy"]) > [class*="_turnStatusClock"] {
+  color: var(--dsw-alias-label-tertiary, #777);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+[data-thought-buddy-row] .tb-elapsed { flex: none; }
+[data-chat-running] [class*="_runningContent"]:has(> [data-thought-buddy-row="running"]) {
+  max-inline-size: 100%;
+  min-block-size: calc(28px + var(--dsh-content-font-delta, 0px));
+  block-size: auto;
+}
+[data-chat-running] [class*="_runningContent"]:has(> [data-thought-buddy-row="running"])
+  > :is([class*="_runningIcon"], [class*="_runningText"]) {
+  display: none;
+}
 [data-thought-buddy] {
   display: inline-flex;
   align-items: center;
@@ -52,6 +78,7 @@ function tbInjectStyles(): void {
 }
 `;
   document.head.appendChild(style);
+  return () => style.remove();
 }
 
 /* ========================= 几何（移植自 geometry.dart） ========================= */
@@ -177,92 +204,66 @@ const TB_WORDS: string[] = [
   'Synthesizing', 'Thinking', 'Transmuting', 'Vibing', 'Working',
 ];
 
-interface TbTypewriter {
-  switchWord(): void;
-  stop(): void;
-}
-
-/**
- * 在 turnStatus 上挂打字机：每次表情切换调用 switchWord()，
- * 先逐字符删除当前文字，停顿后逐字符打出列表中的下一个词（带 "..."）。
- * React 渲染的文本 fiber 的 children 字符串始终不变，因此不会覆盖我们的修改。
- * 返回 { switchWord, stop }；root 卸载时 stop() 由观察器清理。
- */
-function tbStartTypewriter(root: Element): TbTypewriter | null {
-  let textNode: Text | null = null;
-  for (const node of root.childNodes) {
-    if (node.nodeType === 3) {
-      textNode = node as Text;
-      break;
-    }
-  }
-  if (textNode === null) return null;
-
+function tbTypewriter(label: Text) {
   const DELETE_MS = 40;
   const TYPE_MS = 46;
   const HOLD_MS = 420;
-  let timer: number | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   let wordIndex = -1;
 
   const pickNext = (): string => {
-    if (TB_WORDS.length === 0) return 'Deep diving';
-    let next = wordIndex;
-    while (next === wordIndex) {
-      next = Math.floor(Math.random() * TB_WORDS.length);
+    let next = Math.floor(Math.random() * (TB_WORDS.length - Number(wordIndex >= 0)));
+    if (wordIndex >= 0 && next >= wordIndex) {
+      next += 1;
     }
     wordIndex = next;
     return TB_WORDS[next];
   };
 
-  const clearTimer = (): void => {
-    if (timer !== null) {
-      clearInterval(timer);
-      timer = null;
+  const stop = (): void => {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      timer = undefined;
     }
   };
 
-  const startTyping = (word: string): void => {
-    let i = 0;
-    timer = setInterval(() => {
-      if (!root.isConnected) {
-        clearTimer();
-        return;
+  const schedule = (callback: () => void, delay: number): void => {
+    timer = setTimeout(() => {
+      timer = undefined;
+      if (label.isConnected) {
+        callback();
       }
-      i += 1;
-      if (i < word.length) {
-        textNode.textContent = word.slice(0, i);
-      } else {
-        textNode.textContent = word + '...';
-        clearTimer();
-      }
-    }, TYPE_MS);
+    }, delay);
   };
 
-  /** 删除当前文字 → 停顿 → 逐字打出下一个词。 */
   const switchWord = (): void => {
-    clearTimer();
-    timer = setInterval(() => {
-      if (!root.isConnected) {
-        clearTimer();
-        return;
-      }
-      const t = textNode.textContent ?? '';
-      if (t.length <= 1) {
-        clearTimer();
-        textNode.textContent = '';
-        setTimeout(() => {
-          if (!root.isConnected) return;
-          startTyping(pickNext());
-        }, HOLD_MS);
+    stop();
+    const word = pickNext();
+    let typed = 0;
+    const type = (): void => {
+      typed += 1;
+      if (typed < word.length) {
+        label.data = word.slice(0, typed);
+        schedule(type, TYPE_MS);
       } else {
-        textNode.textContent = t.slice(0, -1);
+        label.data = word + '...';
       }
-    }, DELETE_MS);
+    };
+    const erase = (): void => {
+      const remaining = label.data.slice(0, -1);
+      label.data = remaining;
+      if (remaining) {
+        schedule(erase, DELETE_MS);
+      } else {
+        schedule(type, HOLD_MS);
+      }
+    };
+    schedule(erase, DELETE_MS);
   };
 
   return {
     switchWord,
-    stop: clearTimer,
+    stop,
   };
 }
 
@@ -366,7 +367,6 @@ function tbBuildSvg(cfg: TbConfig, dark: boolean): TbEngine {
  */
 function tbRunAvatar(
   engine: TbEngine,
-  cfg: TbConfig,
   onExpression?: () => void,
 ): { stop(): void } {
   const state = TB_STATES.thinking;
@@ -531,17 +531,7 @@ function tbRunAvatar(
   return { stop };
 }
 
-/**
- * 在 dshLoader.ui 提供的挂载节点里渲染 GrokBot 头像，并联动状态条打字机文字。
- *
- * 放置由 slot 引擎负责（`conversation.status` 锚点声明了 `insert: 'prepend'`），
- * 因此本函数只往 `mount` 里追加内容，不再自己 insertBefore；幂等与自愈也由引擎
- * 保证，原先的 `[data-thought-buddy]` 去重判断随之移除。
- *
- * @param mount 引擎创建的挂载节点（已插入状态条内部最前）。
- * @param host  状态条元素本身——打字机需要它的文本节点。
- */
-function tbMountAvatar(mount: Element, host: Element, cfg: TbConfig): TbHandle | null {
+function tbMountAvatar(mount: Element, cfg: TbConfig, onExpression: () => void): TbHandle {
   const dark =
     typeof matchMedia === 'function' &&
     matchMedia('(prefers-color-scheme: dark)').matches;
@@ -552,20 +542,14 @@ function tbMountAvatar(mount: Element, host: Element, cfg: TbConfig): TbHandle |
   mount.appendChild(wrap);
   // rAF 循环以挂载节点为存活基准：引擎在卸载或宿主重渲染时移除它，动画随即自停。
   engine.root = mount;
-  const typewriter = tbStartTypewriter(host);
-  const handle = tbRunAvatar(engine, cfg, () => typewriter?.switchWord());
-  return {
-    stop: () => {
-      handle.stop();
-      typewriter?.stop();
-    },
-  };
+  return tbRunAvatar(engine, onExpression);
 }
 
 /** 在 dshLoader.ui 提供的挂载节点里渲染 emoji 轮播。 */
-function tbMountEmoji(mount: Element, cfg: TbConfig): TbHandle | null {
+function tbMountEmoji(mount: Element, cfg: TbConfig): TbHandle {
   const span = document.createElement('span');
   span.setAttribute('data-thought-buddy', 'emoji');
+  span.setAttribute('aria-hidden', 'true');
   span.textContent = cfg.emojis[0] || '🤿';
   mount.appendChild(span);
   let index = 0;
@@ -595,6 +579,10 @@ function tbMountEmoji(mount: Element, cfg: TbConfig): TbHandle | null {
 
 /** dshLoader.ui 中本插件用到的最小面（避免为纯脚本引入类型依赖）。 */
 interface TbUiApi {
+  defineAnchor(
+    name: string,
+    spec: { describe: string; find: () => Iterable<Element>; insert: 'prepend' },
+  ): () => void;
   mount(
     anchor: string,
     spec: {
@@ -605,34 +593,123 @@ interface TbUiApi {
   ): () => void;
 }
 
-/**
- * 启动：把小表情挂到 dsh-loader 的 `conversation.status` 锚点上。
- *
- * 从「自己维护一套 DOM 注入」改为「向 loader 注册一个 slot」之后，下面这些不再
- * 由本插件实现，而由 `dshLoader.ui` 统一提供：
- *   - MutationObserver 与 requestAnimationFrame 合流节流；
- *   - 宿主选择器（主路径 `[data-conversation-scroll] [role="status"]` 与全文档
- *     兜底路径），现在是 loader 锚点表里的一条，dsh 改 DOM 只需改 loader；
- *   - 每宿主幂等、React 重渲染后的自愈补回、宿主脱离文档时的清理。
- *
- * 本插件只保留两件真正属于自己的判断：状态条文案是否是「Deep diving…」这类，
- * 以及渲染哪种表情。返回值是 loader 给的 disposer。
- */
-function tbStart(ui: TbUiApi, cfg: TbConfig): () => void {
-  if (!cfg.enabled) return () => {};
-  tbInjectStyles();
+const TB_RUNNING_ANCHOR = 'thought-buddy.running';
+const TB_RUNNING_LABEL = ':scope > [class*="_runningText"]';
+const TB_LEGACY_LABEL = /^(?:Deep diving|深度求索中)/i;
 
-  return ui.mount('conversation.status', {
+function tbLegacyLabel(host: Element): Text | undefined {
+  return [...host.childNodes].find(
+    (node): node is Text => node.nodeType === 3 && TB_LEGACY_LABEL.test(node.textContent?.trim() ?? ''),
+  );
+}
+
+function tbMountBuddy(mount: HTMLElement, cfg: TbConfig, initial: string, kind: 'running' | 'legacy'): () => void {
+  const word = document.createElement('span');
+  word.className = 'tb-word';
+  const wordText = document.createTextNode(initial);
+  word.appendChild(wordText);
+  if (kind === 'running') {
+    word.setAttribute('aria-hidden', 'true');
+  }
+
+  const typewriter = cfg.mode === 'avatar' ? tbTypewriter(wordText) : undefined;
+  const animation = typewriter
+    ? tbMountAvatar(mount, cfg, typewriter.switchWord)
+    : tbMountEmoji(mount, cfg);
+  mount.appendChild(word);
+  mount.setAttribute('data-thought-buddy-row', kind);
+  return () => {
+    animation.stop();
+    typewriter?.stop();
+  };
+}
+
+function tbMountRunning(mount: HTMLElement, host: Element, cfg: TbConfig): () => void {
+  // 屏幕阅读器专用文案提供当前语言的状态词，宿主可见文案提供实时用时。
+  const announcement = host.parentElement?.querySelector(':scope > [role="status"]')?.textContent;
+  const initial = (announcement?.trim() || 'Deep diving').replace(/[.…·]+$/, '');
+  const stop = tbMountBuddy(mount, cfg, initial + '...', 'running');
+  const elapsed = document.createElement('span');
+  elapsed.className = 'tb-elapsed';
+  const elapsedText = document.createTextNode('');
+  elapsed.appendChild(elapsedText);
+  mount.appendChild(elapsed);
+
+  let label: Element | null | undefined;
+  const syncElapsed = (): void => {
+    const current = host.querySelector(TB_RUNNING_LABEL);
+    if (current !== label) {
+      label = current;
+      observer.disconnect();
+      observer.observe(host, { childList: true });
+      if (label) {
+        observer.observe(label, { childList: true, characterData: true, subtree: true });
+      }
+    }
+    const text = label?.textContent ?? '';
+    const duration = text.match(/\d+\s*\p{L}+(?:\s*\d+\s*\p{L}+)*/u)?.[0];
+    const prefix = text.includes('用时') ? '用时 ' : /^Deep diving for /i.test(text) ? 'for ' : '';
+    const next = duration ? prefix + duration : '';
+    if (elapsedText.data !== next) {
+      elapsedText.data = next;
+    }
+  };
+  const observer = new MutationObserver(syncElapsed);
+  syncElapsed();
+  return () => {
+    observer.disconnect();
+    stop();
+  };
+}
+
+function tbStart(ui: TbUiApi, cfg: TbConfig): () => void {
+  if (!cfg.enabled) {
+    return () => {};
+  }
+  const removeStyles = tbInjectStyles();
+  const removeAnchor = ui.defineAnchor(TB_RUNNING_ANCHOR, {
+    describe: '对话中可见的运行状态条',
+    find: () => document.querySelectorAll('[data-chat-running]:not([data-holding]) > [class*="_runningContent"]'),
+    insert: 'prepend',
+  });
+  ui.mount(TB_RUNNING_ANCHOR, {
+    id: 'thought-buddy:running',
+    render: (mount, host) => tbMountRunning(mount, host, cfg),
+  });
+
+  const stopLegacy = ui.mount('conversation.status', {
     id: 'thought-buddy:buddy',
-    // 锚点给出候选状态条；「是不是思考态」仍由本插件按文案判定。
-    // 文案随宿主版本而本地化：0.1.0/0.1.1 硬编码英文 "Deep diving..."，
-    // 0.1.2 起走 locale（中文界面为「深度求索中...」）——两种都认。
-    when: (host) => /diving|深度求索/i.test(host.textContent ?? ''),
+    when: (host) => !host.closest('[data-chat-running]') &&
+      !host.nextElementSibling?.hasAttribute('data-turn-process') && Boolean(tbLegacyLabel(host)),
     render: (mount, host) => {
-      const handle = cfg.mode === 'emoji' ? tbMountEmoji(mount, cfg) : tbMountAvatar(mount, host, cfg);
-      return () => handle?.stop();
+      const label = tbLegacyLabel(host);
+      if (!label) {
+        return;
+      }
+      let original = label.data;
+      const stop = tbMountBuddy(mount, cfg, original, 'legacy');
+      label.data = '';
+      const observer = new MutationObserver(() => {
+        if (label.data) {
+          original = label.data;
+          label.data = '';
+        }
+      });
+      observer.observe(label, { characterData: true });
+      return () => {
+        observer.disconnect();
+        stop();
+        if (label.parentNode === host && label.data === '') {
+          label.data = original;
+        }
+      };
     },
   });
+  return () => {
+    stopLegacy();
+    removeAnchor();
+    removeStyles();
+  };
 }
 
 /* ========================= 插件入口 ========================= */

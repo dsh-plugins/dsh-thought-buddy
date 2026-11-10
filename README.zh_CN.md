@@ -34,7 +34,8 @@
 | 功能 | 说明 |
 |---|---|
 | GrokBot 头像 | thinking 状态表情池 `[8,16,14,17,5]` 自动轮换，弹簧形变表情过渡、320ms 眨眼（随机 3.5–7s 间隔）、球面转头投影 + 视线游移、整体轻摆（1.7s 呼吸动画） |
-| 表情联动打字机 | 每次表情切换时，状态行文字从 `Deep diving...` 以打字机效果变换（先逐字符删除、停顿后逐字打出），从 55 个候选词（`Accomplishing`…`Working`）轮换，如 `Reticulating...`；React 重渲染不会覆盖（文本 fiber 的 children 字符串始终不变，React bail out） |
+| 表情联动打字机 | 每次头像切换表情时，状态文字逐字删除，短暂停顿后从 55 个候选词中打出下一个词，例如 `Reticulating...` |
+| 独立用时 | 深灰色用时显示在打字机右侧，沿用宿主的计时。打字时用时的横向位置固定，整行随对话滚动 |
 | Emoji 模式 | 备用模式：在 emoji 列表间轮播（默认 `🤿 🫧 🌊 🐙 🔍 🧠 💭`），每次切换带弹跳入场 |
 | 主题适配 | 跟随 `prefers-color-scheme`：亮色 `#5b7fe5/#fffdf7`，暗色 `#6689ea/#181a15`（与 DSH 主题一致） |
 | 减少动效 | `prefers-reduced-motion: reduce` 时关闭摆动与转头，仅保留表情/眨眼 |
@@ -96,7 +97,7 @@ npm run build
 npm run verify
 ```
 
-宿主 `src/index.ts` 通过 `ctx.dshLoader.config.register` 注册配置模板。客户端读取并订阅配置，使用 `dshLoaderUi.mount` 挂载 SVG 动画与打字机状态，并在更新和卸载时清理。
+宿主 `src/index.ts` 通过 `ctx.dshLoader.config.register` 注册配置模板。客户端读取并订阅配置，通过 `dshLoaderUi` 挂载可见运行状态条，并在更新和卸载时清理动画、打字机和用时监听。
 
 `src/config.ts` 保存可供浏览器导入的默认值和类型；`src/config-template.ts` 是宿主专用模板，浏览器产物不导入宿主模块。tsdown 把客户端 ESM 代码打包为 `__ModuleLoader__.load` 工厂；客户端声明依赖 `dshLoaderUi` 服务，包元数据声明依赖 loader 客户端模块。
 
