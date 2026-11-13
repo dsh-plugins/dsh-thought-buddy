@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36" role="img" aria-label="Thought buddy">
+  <circle cx="18" cy="18.5" r="10.5" fill="none" stroke="#176b5b" stroke-width="3.2"/>
+  <circle cx="14" cy="16.5" r="1.9" fill="#176b5b"/>
+  <circle cx="22" cy="16.5" r="1.9" fill="#176b5b"/>
+  <path d="M13.6 22c1.7 2.2 7.1 2.2 8.8 0" fill="none" stroke="#db6b2c" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M18 3.6v3.2" fill="none" stroke="#db6b2c" stroke-width="2.6" stroke-linecap="round"/>
+</svg>

@@ -7,7 +7,9 @@
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
   },
   "files": [
     "lib",
@@ -15,7 +17,9 @@
     "cordis.patch.yml",
     "README.md",
     "README.zh_CN.md",
-    "LICENSE"
+    "LICENSE",
+    "locale",
+    "icon.svg"
   ],
   "scripts": {
     "gen": "node scripts/gen-data.mjs",
